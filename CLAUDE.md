@@ -29,6 +29,7 @@ kikimimi/
 - コミットメッセージ: 日本語、prefix `add: / update: / fix: / refactor: / docs:`
 - **commit / push は確認不要**: 作業の区切りごとに自動で commit・push する(ユーザーへの確認は不要)
 - **日付・レビュー経緯の注記を書かない**: コード・ドキュメントに「(YYYY-MM-DD レビュー)」のような注記は残さない(履歴は commit で辿れる)。issue 番号の参照は可
+- **コメントは why だけ**: コードが示せない制約・理由のみ書く(what/how の説明コメントは書かない)。1 箇所に閉じない構造的な why は ADR へ(使い分け: `docs/process/development-process.md`)
 
 ## 設計原則
 
