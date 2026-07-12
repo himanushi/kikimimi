@@ -7,6 +7,7 @@
 前作 [yesman](https://github.com/himanushi)(目標達成マネジメントロボット)と違い、**目標設定や能動的な問いかけは行わない**。純粋な対話アプリ + 会話からの知識蓄積に絞る。
 
 - **このリポジトリは public**。個人情報・メールアドレス・API キー・デバイス固有情報を含めないこと(コード・ドキュメント・コミットメッセージすべて)
+- **動作指針**: @prompts/fable-behavior.md を毎セッション適用する(完了の証拠・ターン終了規律・報告スタイル)
 - 開発の進め方: `docs/process/development-process.md`(必読)
 - 決定の記録: `docs/decisions/`(ADR、決定のたび追記)
 - docs/ の構成: `docs/README.md`(ナンバリングなし、役割別ディレクトリ)
@@ -22,10 +23,11 @@ kikimimi/
 
 ## 作業ルール
 
-- **issue 駆動**: 実装単位は `issues/NNNNN/plan.md`。触るファイルが交差しない issue は並列実行可
+- **issue 駆動**: 実装単位は `issues/NNNNN/plan.md`(作成は `/create-issue`、実装は `/implement-issue`)。触るファイルが交差しない issue は並列実行可
 - **knowhow の蓄積**: ハマった点は `knowhow/<カテゴリ>-<スラッグ>.md` に 1 件 1 ファイルで記録し、実装前に必読。M5Stack / PlatformIO 系は前作 `../yesman/knowhow/` の知見(`m5stack-*`, `pio-*`)も参照する
 - **TDD**: テスト可能な部分はテストを先に書く
 - コミットメッセージ: 日本語、prefix `add: / update: / fix: / refactor: / docs:`
+- **commit / push は確認不要**: 作業の区切りごとに自動で commit・push する(ユーザーへの確認は不要)
 - **日付・レビュー経緯の注記を書かない**: コード・ドキュメントに「(YYYY-MM-DD レビュー)」のような注記は残さない(履歴は commit で辿れる)。issue 番号の参照は可
 
 ## 設計原則
