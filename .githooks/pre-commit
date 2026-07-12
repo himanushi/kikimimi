@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# commit 前にステージ済み差分をシークレットスキャンする
+# 有効化: git config core.hooksPath .githooks
+if ! command -v gitleaks >/dev/null 2>&1; then
+  echo "gitleaks が見つかりません。インストールしてください: brew install gitleaks" >&2
+  exit 1
+fi
+exec gitleaks git --pre-commit --staged --redact

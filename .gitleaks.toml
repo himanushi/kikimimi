@@ -1,0 +1,10 @@
+# gitleaks 設定。デフォルトルール(150+ パターン)を継承する
+[extend]
+useDefault = true
+
+# public repo のため、API キーだけでなく個人プロバイダのメールアドレスも検出する
+[[rules]]
+id = "personal-email-address"
+description = "個人メールアドレス(public repo に含めない)"
+regex = '''[a-zA-Z0-9._%+-]+@(gmail|yahoo|icloud|outlook|hotmail|proton|protonmail)\.(com|co\.jp|jp|ne\.jp|me|ch)'''
+keywords = ["gmail", "yahoo", "icloud", "outlook", "hotmail", "proton"]
