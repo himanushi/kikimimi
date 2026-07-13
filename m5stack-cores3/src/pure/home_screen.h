@@ -17,5 +17,8 @@ enum class HomeTap {
     Settings,
 };
 
+// タップ判定は描画矩形より一回り広く取る(指先が数 px ずれてもボタンとして扱う)
+constexpr int HOME_HIT_PADDING = 10;
+
 HomeLayout homeScreenLayout(int screenWidth, int screenHeight);
 HomeTap homeScreenHitTest(int screenWidth, int screenHeight, int x, int y);

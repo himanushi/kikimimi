@@ -38,6 +38,10 @@ constexpr uint32_t COLOR_ACCENT = 0x00C2A8;
 constexpr uint32_t COLOR_ACCENT_DIM = 0x123B38;
 constexpr uint32_t COLOR_TEXT = 0xE6E6E6;
 constexpr uint32_t COLOR_SUBTEXT = 0x6E7681;
+constexpr uint32_t COLOR_TOUCH_MARK = 0x8FA3AD;  // タップ位置に一瞬出す薄い白丸
+
+constexpr int TOUCH_MARK_RADIUS = 14;
+constexpr uint32_t TOUCH_MARK_DURATION_MS = 150;
 
 constexpr uint32_t HOME_REFRESH_INTERVAL_MS = 30000;  // バッテリー・時計の定期再描画間隔
 
@@ -383,6 +387,32 @@ RealtimeCallbacks buildRealtimeCallbacks() {
     return cb;
 }
 
+// タッチマーク: タップ位置に薄い円を描き、一定時間後に画面を描き直して消す。
+// 各画面は全体再描画の関数を持っているため、復元はそれを呼ぶだけでよい
+uint32_t touchMarkShownAtMs = 0;
+
+void redrawCurrentScreen() {
+    switch (mode) {
+        case Mode::CONNECTED: drawForCurrentState(); break;
+        case Mode::SETTINGS: drawSettingsScreen(); break;
+        case Mode::SETTINGS_URL_GUIDE: drawUrlGuideScreen(staPortalInfo); break;
+        case Mode::PORTAL: break;  // ポータル画面はタッチ操作がないためマークを出さない
+    }
+}
+
+void showTouchMark(int x, int y) {
+    if (mode == Mode::PORTAL) return;
+    M5.Display.fillCircle(x, y, TOUCH_MARK_RADIUS, COLOR_TOUCH_MARK);
+    touchMarkShownAtMs = millis();
+}
+
+void clearTouchMarkIfExpired() {
+    if (touchMarkShownAtMs == 0) return;
+    if (millis() - touchMarkShownAtMs < TOUCH_MARK_DURATION_MS) return;
+    touchMarkShownAtMs = 0;
+    redrawCurrentScreen();
+}
+
 void toggleRealtimeConnection() {
     RealtimeState state = realtimeCurrentState();
     if (state == RealtimeState::Idle || state == RealtimeState::ErrorState) {
@@ -425,6 +455,12 @@ void setup() {
 
 void loop() {
     M5.update();
+    auto touch = M5.Touch.getDetail();
+    bool tapped = touch.wasPressed();
+    if (tapped) {
+        // 反応が悪い等の調査用に、タップの生座標と画面モードをログに残す
+        Serial.printf("[touch] x=%d y=%d mode=%d\n", touch.x, touch.y, static_cast<int>(mode));
+    }
     if (mode == Mode::PORTAL) {
         updatePortalScreen(portalStationCount());
         if (portalLoop()) {
@@ -444,20 +480,18 @@ void loop() {
         RealtimeState state = realtimeCurrentState();
         if (state == RealtimeState::Idle) {
             updateHomeScreenPeriodic();
-            auto touch = M5.Touch.getDetail();
-            if (touch.wasPressed()) {
+            if (tapped) {
                 switch (homeScreenHitTest(M5.Display.width(), M5.Display.height(), touch.x, touch.y)) {
                     case HomeTap::Talk: toggleRealtimeConnection(); break;
                     case HomeTap::Settings: enterSettings(); break;
                     case HomeTap::None: break;
                 }
             }
-        } else if (M5.Touch.getDetail().wasPressed()) {
+        } else if (tapped) {
             toggleRealtimeConnection();
         }
     } else if (mode == Mode::SETTINGS) {
-        auto touch = M5.Touch.getDetail();
-        if (touch.wasPressed()) {
+        if (tapped) {
             switch (settingsScreenHitTest(M5.Display.width(), M5.Display.height(), touch.x, touch.y)) {
                 case SettingsTap::VolumeUp: applyVolumeChange(settingsVolumeIncrease(currentVolume)); break;
                 case SettingsTap::VolumeDown: applyVolumeChange(settingsVolumeDecrease(currentVolume)); break;
@@ -475,10 +509,13 @@ void loop() {
             }
         }
     } else if (mode == Mode::SETTINGS_URL_GUIDE) {
-        if (M5.Touch.getDetail().wasPressed()) {
+        if (tapped) {
             mode = Mode::SETTINGS;
             drawSettingsScreen();
         }
     }
+    // 遷移処理の後に描く: 遷移先の全画面再描画でマークが消されず、必ず一瞬見えるようにする
+    if (tapped) showTouchMark(touch.x, touch.y);
+    clearTouchMarkIfExpired();
     delay(10);
 }

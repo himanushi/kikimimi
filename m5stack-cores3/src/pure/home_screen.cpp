@@ -3,7 +3,8 @@
 namespace {
 
 bool contains(const HomeRect& r, int x, int y) {
-    return x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h;
+    return x >= r.x - HOME_HIT_PADDING && x < r.x + r.w + HOME_HIT_PADDING &&
+           y >= r.y - HOME_HIT_PADDING && y < r.y + r.h + HOME_HIT_PADDING;
 }
 
 }  // namespace
@@ -19,7 +20,7 @@ HomeLayout homeScreenLayout(int screenWidth, int screenHeight) {
         talkSize,
     };
 
-    int settingsSize = screenHeight / 6;
+    int settingsSize = screenHeight / 4;  // 40px 四方では指で押しにくかったため指サイズ(60px)にする
     int margin = screenHeight / 24;
     layout.settingsButton = {
         screenWidth - settingsSize - margin,

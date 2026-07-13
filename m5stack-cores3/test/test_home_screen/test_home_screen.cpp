@@ -62,11 +62,26 @@ static void test_fixed_bottom_right_corner_returns_settings() {
 
 static void test_tap_just_outside_talk_button_returns_none() {
     HomeLayout layout = homeScreenLayout(SCREEN_W, SCREEN_H);
-    int xOutside = layout.talkButton.x - 5;
+    // 当たり判定の余白(HOME_HIT_PADDING)のさらに外は無反応
+    int xOutside = layout.talkButton.x - HOME_HIT_PADDING - 5;
     int yOutside = layout.talkButton.y + layout.talkButton.h / 2;
-    // 設定ボタンとも重ならない座標であることを前提に、境界外は無反応であることを確認する
     HomeTap tap = homeScreenHitTest(SCREEN_W, SCREEN_H, xOutside, yOutside);
     TEST_ASSERT_TRUE(HomeTap::None == tap);
+}
+
+// 指先のずれを許容するため、描画矩形の少し外側でも反応する(余白 HOME_HIT_PADDING)
+static void test_tap_slightly_outside_settings_button_still_returns_settings() {
+    HomeLayout layout = homeScreenLayout(SCREEN_W, SCREEN_H);
+    int x = layout.settingsButton.x - HOME_HIT_PADDING / 2;
+    int y = layout.settingsButton.y + layout.settingsButton.h / 2;
+    TEST_ASSERT_TRUE(HomeTap::Settings == homeScreenHitTest(SCREEN_W, SCREEN_H, x, y));
+}
+
+// 指で確実に押せるサイズ(56px 以上)を保証する
+static void test_settings_button_is_finger_sized() {
+    HomeLayout layout = homeScreenLayout(SCREEN_W, SCREEN_H);
+    TEST_ASSERT_TRUE(layout.settingsButton.w >= 56);
+    TEST_ASSERT_TRUE(layout.settingsButton.h >= 56);
 }
 
 int main() {
@@ -80,5 +95,7 @@ int main() {
     RUN_TEST(test_fixed_screen_center_returns_talk);
     RUN_TEST(test_fixed_bottom_right_corner_returns_settings);
     RUN_TEST(test_tap_just_outside_talk_button_returns_none);
+    RUN_TEST(test_tap_slightly_outside_settings_button_still_returns_settings);
+    RUN_TEST(test_settings_button_is_finger_sized);
     return UNITY_END();
 }
