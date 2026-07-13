@@ -213,37 +213,24 @@ ChatResult callChatApi(const String& apiKey, const String& instructions, const S
     return result;
 }
 
-struct PcmReadResult {
-    size_t len = 0;
-    bool timedOut = false;  // Content-Length 分(または接続終了)を読み切る前にタイムアウトした
-};
-
-// 200 応答の body を PCM 受信バッファへ読む(Content-Length 不明でもストリームから上限まで読む)
-PcmReadResult readPcmResponse(HTTPClient& http) {
-    NetworkClient* stream = http.getStreamPtr();
-    PcmReadResult result;
-    const uint32_t start = millis();
-    int remaining = http.getSize();
-    while (http.connected() && (remaining > 0 || remaining == -1)) {
-        if (millis() - start >= TTS_TIMEOUT_MS) {
-            result.timedOut = true;  // 期待していたデータを読み切る前にタイムアウトした(途中で切れた PCM)
-            break;
-        }
-        const size_t avail = stream->available();
-        if (avail == 0) {
-            if (remaining == -1 && !stream->connected()) break;
-            delay(5);
-            continue;
-        }
-        const size_t space = TTS_MAX_BYTES - result.len;
-        if (space == 0) break;  // 30 秒上限に達した(既知の仕様上のトリミング)
-        const int n = stream->readBytes(ttsBuf + result.len, std::min(avail, space));
-        if (n <= 0) break;
-        result.len += n;
-        if (remaining > 0) remaining -= n;
+// TTS 応答は chunked + keep-alive で返るため、生ストリームの自前読みでは終端を検知できず
+// (connected() が落ちない)、chunked のフレーミングバイトも混入する。chunked のデコードと
+// 終端検知を行う HTTPClient::writeToStream() に、バッファへ書くだけの Stream を渡して受ける
+class PcmBufferStream : public Stream {
+public:
+    size_t write(const uint8_t* data, size_t len) override {
+        size_t space = TTS_MAX_BYTES - received;
+        size_t n = std::min(len, space);
+        memcpy(ttsBuf + received, data, n);
+        received += n;
+        return len;  // 30 秒上限の超過分は捨てるが、消費済みと返して転送は最後まで続けさせる
     }
-    return result;
-}
+    size_t write(uint8_t b) override { return write(&b, 1); }
+    int available() override { return 0; }
+    int read() override { return -1; }
+    int peek() override { return -1; }
+    size_t received = 0;
+};
 
 struct TtsResult {
     bool ok = false;
@@ -276,17 +263,18 @@ TtsResult callTtsApi(const String& apiKey, const String& text) {
         result.errorMessage = httpCode > 0 ? extractErrorMessage(body, httpCode) : "通信エラー";
         return result;
     }
-    PcmReadResult pcm = readPcmResponse(http);
+    PcmBufferStream pcm;
+    int written = http.writeToStream(&pcm);
     http.end();
-    if (pcm.timedOut) {
-        result.errorMessage = "音声合成の受信がタイムアウトしました";
+    if (written < 0) {
+        result.errorMessage = "音声合成の受信に失敗しました(code " + String(written) + ")";
         return result;
     }
-    if (pcm.len == 0) {
+    if (pcm.received == 0) {
         result.errorMessage = "音声合成の応答が空でした";
         return result;
     }
-    ttsLen = pcm.len;
+    ttsLen = pcm.received;
     result.ok = true;
     return result;
 }
@@ -300,8 +288,12 @@ void reportError(const String& message) {
 
 // Thinking: STT → chat → TTS を順に呼ぶ。どこかで失敗したら ErrorState にして抜ける
 void runPipeline() {
+    uint32_t t0 = millis();
     SttResult stt = callSttApi(pendingApiKey, recSamples * 2);
+    Serial.printf("[pipeline] stt %s %lums rec=%luB text=%dchars\n", stt.ok ? "ok" : "FAIL",
+                  millis() - t0, recSamples * 2, stt.transcript.length());
     if (!stt.ok) {
+        Serial.printf("[pipeline] stt error: %s\n", stt.errorMessage.c_str());
         reportError("音声認識に失敗しました: " + stt.errorMessage);
         return;
     }
@@ -314,8 +306,12 @@ void runPipeline() {
         callbacks.onTranscriptUpdated(transcript_view::Speaker::User, stt.transcript, true);
     }
 
+    uint32_t t1 = millis();
     ChatResult chat = callChatApi(pendingApiKey, pendingInstructions, stt.transcript);
+    Serial.printf("[pipeline] chat %s %lums out=%dchars\n", chat.ok ? "ok" : "FAIL", millis() - t1,
+                  chat.content.length());
     if (!chat.ok) {
+        Serial.printf("[pipeline] chat error: %s\n", chat.errorMessage.c_str());
         reportError("応答生成に失敗しました: " + chat.errorMessage);
         return;
     }
@@ -325,8 +321,12 @@ void runPipeline() {
     conversationHistory.push_back({"user", stt.transcript.c_str()});
     conversationHistory.push_back({"assistant", chat.content.c_str()});
 
+    uint32_t t2 = millis();
     TtsResult tts = callTtsApi(pendingApiKey, chat.content);
+    Serial.printf("[pipeline] tts %s %lums pcm=%uB total=%lums\n", tts.ok ? "ok" : "FAIL",
+                  millis() - t2, ttsLen, millis() - t0);
     if (!tts.ok) {
+        Serial.printf("[pipeline] tts error: %s\n", tts.errorMessage.c_str());
         reportError("音声合成に失敗しました: " + tts.errorMessage);
         return;
     }
