@@ -4,6 +4,7 @@
 
 #include "config_store.h"
 #include "portal.h"
+#include "realtime_client.h"
 
 namespace {
 
@@ -11,6 +12,12 @@ enum class Mode { PORTAL, CONNECTED };
 Mode mode = Mode::PORTAL;
 
 constexpr uint32_t WIFI_CONNECT_TIMEOUT_MS = 15000;
+// 会話履歴の保存・知識蓄積は範囲外(00002 は接続確認が目的)。往復確認用の固定メッセージ
+constexpr const char* GREETING_MESSAGE = "こんにちは";
+constexpr const char* SESSION_INSTRUCTIONS = "あなたは kikimimi という名前の相棒です。短く日本語で応答してください。";
+
+String storedApiKey;
+String responseText;
 
 void drawLines(std::initializer_list<String> lines) {
     auto& d = M5.Display;
@@ -52,6 +59,49 @@ void startPortal(const String& reason) {
     mode = Mode::PORTAL;
 }
 
+String realtimeStateLabel(RealtimeState state) {
+    switch (state) {
+        case RealtimeState::Idle: return "タップで対話を開始";
+        case RealtimeState::Connecting: return "接続中...";
+        case RealtimeState::Established: return "会話できます(タップで終了)";
+        case RealtimeState::ErrorState: return "エラー(タップで再試行)";
+    }
+    return "";
+}
+
+void drawRealtimeScreen() {
+    drawLines({realtimeStateLabel(realtimeCurrentState()), "", responseText});
+}
+
+RealtimeCallbacks buildRealtimeCallbacks() {
+    RealtimeCallbacks cb;
+    cb.onStateChanged = [](RealtimeState state) {
+        if (state == RealtimeState::Established) {
+            responseText = "";
+            realtimeSendUserMessage(GREETING_MESSAGE);
+        }
+        drawRealtimeScreen();
+    };
+    cb.onResponseTextDelta = [](const String& delta) {
+        responseText += delta;
+        drawRealtimeScreen();
+    };
+    cb.onError = [](const String& message) { responseText = message; };
+    return cb;
+}
+
+void toggleRealtimeConnection() {
+    RealtimeState state = realtimeCurrentState();
+    if (state == RealtimeState::Idle || state == RealtimeState::ErrorState) {
+        Serial.printf("[realtime] free heap=%u free psram=%u\n", ESP.getFreeHeap(),
+                     ESP.getFreePsram());
+        realtimeConnect(storedApiKey, SESSION_INSTRUCTIONS, buildRealtimeCallbacks());
+    } else {
+        realtimeDisconnect();
+        drawRealtimeScreen();
+    }
+}
+
 }  // namespace
 
 void setup() {
@@ -69,8 +119,8 @@ void setup() {
         return;
     }
     mode = Mode::CONNECTED;
-    drawLines({"接続しました", "SSID: " + config.ssid, "IP: " + WiFi.localIP().toString(),
-               "", "タップで対話(未実装)"});
+    storedApiKey = config.apiKey;
+    drawRealtimeScreen();
 }
 
 void loop() {
@@ -78,6 +128,10 @@ void loop() {
     if (mode == Mode::PORTAL && portalLoop()) {
         Serial.println("[portal] config saved, restarting");
         ESP.restart();
+    }
+    if (mode == Mode::CONNECTED) {
+        realtimeLoop();
+        if (M5.Touch.getDetail().wasPressed()) toggleRealtimeConnection();
     }
     delay(10);
 }
