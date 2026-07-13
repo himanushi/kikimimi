@@ -18,3 +18,4 @@
 - [analysis/fable-vs-opus-analysis.md](analysis/fable-vs-opus-analysis.md) — Fable 5 と Opus 4.8 の差の分析(振る舞い移植の根拠)
 - [decisions/00001-secret-scanning-guardrails.md](decisions/00001-secret-scanning-guardrails.md) — シークレット混入防止の多層ガードレール
 - [decisions/00002-api-key-provisioning-via-setup-portal.md](decisions/00002-api-key-provisioning-via-setup-portal.md) — API キーはセットアップポータルで登録し NVS 保存
+- [decisions/00003-realtime-audio-format-and-turn-detection.md](decisions/00003-realtime-audio-format-and-turn-detection.md) — 音声は PCM16 24kHz + semantic_vad、ターン全量受信後に再生
