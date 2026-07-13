@@ -37,7 +37,7 @@
 | `docs/analysis/` | 調査レポート | 調査のたび |
 | `docs/ROADMAP.md` | チェックリスト(各項目に完了条件) | スライス完了ごと |
 | `knowhow/` | ハマった点を 1 件 1 ファイルで蓄積。実装前に必読 | ハマるたび |
-| `issues/NNNNN/` | plan.md(着手前の仕様)/ log.md(issue に閉じる判断の why)/ result.md(検証の証跡) | タスクごと |
+| `issues/NNNNN/` | plan.md(着手前の仕様)/ log.md(進行ログ: どう進めたか・途中の判断の why)/ result.md(検証の証跡) | タスクごと |
 
 運用ループの核: **AI が間違えるたびに CLAUDE.md か knowhow/ に 1 行追記する**(失敗駆動追記)。
 
