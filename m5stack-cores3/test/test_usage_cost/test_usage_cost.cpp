@@ -86,6 +86,55 @@ static void test_format_jpy_label_rounds_to_one_decimal() {
     TEST_ASSERT_EQUAL_STRING("¥12.4", formatJpyLabel(12.36).c_str());
 }
 
+// gpt-5-nano: in $0.05/M, out $0.40/M(issue 00014)
+static void test_chat_cost_prompt_and_completion_tokens() {
+    // prompt 1,000,000 * $0.05 = $0.05 → ¥8, completion 1,000,000 * $0.40 = $0.40 → ¥64
+    double jpy = usage_cost::calculateChatCostJpy(1000000, 1000000, 0);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 72.0f, jpy);
+}
+
+static void test_chat_cost_zero_usage_costs_nothing() {
+    TEST_ASSERT_EQUAL_FLOAT(0.0f, usage_cost::calculateChatCostJpy(0, 0, 0));
+}
+
+// cached はキャッシュなし単価と同じ($0.05/M)ため、素朴な合算と一致する
+// (issue 00014 では chat の cached 単価をキャッシュなしと区別しない。区別が必要になったら拡張する)
+static void test_chat_cost_cached_tokens_are_subset_of_prompt() {
+    double withCache = usage_cost::calculateChatCostJpy(1000000, 0, 400000);
+    double withoutCache = usage_cost::calculateChatCostJpy(1000000, 0, 0);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, withoutCache, withCache);
+}
+
+// gpt-4o-mini-transcribe: audio in $3.00/M, text out $5.00/M(issue 00014)
+static void test_stt_cost_audio_input_and_text_output() {
+    // audio 1,000,000 * $3.00 = $3.00 → ¥480, text 1,000,000 * $5.00 = $5.00 → ¥800
+    double jpy = usage_cost::calculateSttCostJpy(1000000, 1000000);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 1280.0f, jpy);
+}
+
+static void test_stt_cost_zero_usage_costs_nothing() {
+    TEST_ASSERT_EQUAL_FLOAT(0.0f, usage_cost::calculateSttCostJpy(0, 0));
+}
+
+// gpt-4o-mini-tts: usage が返らないため入力バイト数・出力 PCM 長からの概算(issue 00014)
+static void test_tts_cost_estimate_is_positive_for_nonempty_input_and_output() {
+    // 30 文字相当(UTF-8 で概ね 90 バイト)のテキスト、24kHz 16bit mono で 2 秒分の PCM
+    size_t pcmBytes = 24000 * 2 /*bytes/sample*/ * 2 /*seconds*/;
+    double jpy = usage_cost::estimateTtsCostJpy(90, pcmBytes, 24000);
+    TEST_ASSERT_TRUE(jpy > 0.0);
+}
+
+static void test_tts_cost_estimate_zero_for_empty_input_and_output() {
+    TEST_ASSERT_EQUAL_FLOAT(0.0f, usage_cost::estimateTtsCostJpy(0, 0, 24000));
+}
+
+// PCM が長いほど(=再生時間が長いほど)概算コストも増える
+static void test_tts_cost_estimate_scales_with_pcm_length() {
+    double shortJpy = usage_cost::estimateTtsCostJpy(90, 24000 * 2 * 1, 24000);
+    double longJpy = usage_cost::estimateTtsCostJpy(90, 24000 * 2 * 5, 24000);
+    TEST_ASSERT_TRUE(longJpy > shortJpy);
+}
+
 int main() {
     UNITY_BEGIN();
     RUN_TEST(test_zero_usage_costs_nothing);
@@ -99,5 +148,13 @@ int main() {
     RUN_TEST(test_format_jpy_label_has_yen_sign_and_one_decimal);
     RUN_TEST(test_format_jpy_label_zero);
     RUN_TEST(test_format_jpy_label_rounds_to_one_decimal);
+    RUN_TEST(test_chat_cost_prompt_and_completion_tokens);
+    RUN_TEST(test_chat_cost_zero_usage_costs_nothing);
+    RUN_TEST(test_chat_cost_cached_tokens_are_subset_of_prompt);
+    RUN_TEST(test_stt_cost_audio_input_and_text_output);
+    RUN_TEST(test_stt_cost_zero_usage_costs_nothing);
+    RUN_TEST(test_tts_cost_estimate_is_positive_for_nonempty_input_and_output);
+    RUN_TEST(test_tts_cost_estimate_zero_for_empty_input_and_output);
+    RUN_TEST(test_tts_cost_estimate_scales_with_pcm_length);
     return UNITY_END();
 }

@@ -16,7 +16,7 @@
 #include "pure/wifi_qr.h"
 #include "pure/wifi_scan.h"
 #include "pure/wifi_select.h"
-#include "realtime_client.h"
+#include "voice_pipeline.h"
 
 namespace {
 
@@ -92,7 +92,7 @@ String currentClockLabel() {
     return String(buf);
 }
 
-// ホーム画面(対話開始ボタン・設定ボタン・バッテリー・時刻)。RealtimeState::Idle のときのみ表示する
+// ホーム画面(対話開始ボタン・設定ボタン・バッテリー・時刻)。VoicePipelineState::Idle のときのみ表示する
 void drawHomeScreen() {
     auto& d = canvas;
     int w = d.width();
@@ -274,14 +274,13 @@ void startPortal(const String& reason) {
     mode = Mode::PORTAL;
 }
 
-String realtimeStateLabel(RealtimeState state) {
+String realtimeStateLabel(VoicePipelineState state) {
     switch (state) {
-        case RealtimeState::Idle: return "タップで対話を開始";
-        case RealtimeState::Connecting: return "接続中...";
-        case RealtimeState::Listening: return "聞いています(タップで終了)";
-        case RealtimeState::Thinking: return "考えています...";
-        case RealtimeState::Speaking: return "話しています...";
-        case RealtimeState::ErrorState: return "エラー(タップで再試行)";
+        case VoicePipelineState::Idle: return "タップで対話を開始";
+        case VoicePipelineState::Listening: return "聞いています(タップで終了)";
+        case VoicePipelineState::Thinking: return "考えています...";
+        case VoicePipelineState::Speaking: return "話しています...";
+        case VoicePipelineState::ErrorState: return "エラー(タップで再試行)";
     }
     return "";
 }
@@ -292,7 +291,7 @@ void drawStatusArea() {
     d.fillRect(0, 0, d.width(), TRANSCRIPT_TOP_Y, TFT_BLACK);
     d.setFont(&fonts::efontJA_16);
     d.setTextColor(TFT_WHITE, TFT_BLACK);
-    String statusLine = realtimeStateLabel(realtimeCurrentState()) + "  " +
+    String statusLine = realtimeStateLabel(voicePipelineCurrentState()) + "  " +
                          usage_cost::formatJpyLabel(sessionCostJpy).c_str();
     d.setCursor(12, 12);
     d.print(statusLine);
@@ -329,7 +328,7 @@ void drawRealtimeScreen() {
 
 // Idle はホーム画面、それ以外(接続中・対話中・エラー)は状態 + 会話テキストの画面
 void drawForCurrentState() {
-    if (realtimeCurrentState() == RealtimeState::Idle) {
+    if (voicePipelineCurrentState() == VoicePipelineState::Idle) {
         drawHomeScreenNow();
     } else {
         drawRealtimeScreen();
@@ -357,15 +356,15 @@ void applyVolumeChange(int newVolume) {
     if (!configSaveVolume(currentVolume)) {
         Serial.println("[settings] volume save failed, will not persist across restart");
     }
-    realtimeSetSpeakerVolume(currentVolume);
+    voicePipelineSetSpeakerVolume(currentVolume);
     M5.Speaker.tone(880, 120);
     drawSettingsScreen();
 }
 
-RealtimeCallbacks buildRealtimeCallbacks() {
-    RealtimeCallbacks cb;
-    cb.onStateChanged = [](RealtimeState state) {
-        if (state == RealtimeState::Listening) errorMessage = "";
+VoicePipelineCallbacks buildRealtimeCallbacks() {
+    VoicePipelineCallbacks cb;
+    cb.onStateChanged = [](VoicePipelineState state) {
+        if (state == VoicePipelineState::Listening) errorMessage = "";
         drawForCurrentState();
     };
     cb.onError = [](const String& message) {
@@ -420,14 +419,14 @@ void clearTouchMarkIfExpired() {
 }
 
 void toggleRealtimeConnection() {
-    RealtimeState state = realtimeCurrentState();
-    if (state == RealtimeState::Idle || state == RealtimeState::ErrorState) {
+    VoicePipelineState state = voicePipelineCurrentState();
+    if (state == VoicePipelineState::Idle || state == VoicePipelineState::ErrorState) {
         Serial.printf("[realtime] free heap=%u free psram=%u\n", ESP.getFreeHeap(),
                      ESP.getFreePsram());
         transcriptHistory.clear();
-        realtimeConnect(storedApiKey, SESSION_INSTRUCTIONS, buildRealtimeCallbacks());
+        voicePipelineStart(storedApiKey, SESSION_INSTRUCTIONS, buildRealtimeCallbacks());
     } else {
-        realtimeDisconnect();
+        voicePipelineStop();
         drawForCurrentState();
     }
 }
@@ -447,7 +446,7 @@ void setup() {
 
     StoredConfig config = configLoad();
     currentVolume = config.volume;
-    realtimeSetSpeakerVolume(currentVolume);
+    voicePipelineSetSpeakerVolume(currentVolume);
     if (!config.hasWifi()) {
         startPortal("未設定です");
         return;
@@ -488,9 +487,9 @@ void loop() {
     // 遷移先ブロックが同一タップ(wasPressed は次の M5.update() まで立ちっぱなし)を
     // 二重処理しないようにするため(例: WiFi 設定 → URL QR 画面が開いた瞬間に閉じる)
     if (mode == Mode::CONNECTED) {
-        realtimeLoop();
-        RealtimeState state = realtimeCurrentState();
-        if (state == RealtimeState::Idle) {
+        voicePipelineLoop();
+        VoicePipelineState state = voicePipelineCurrentState();
+        if (state == VoicePipelineState::Idle) {
             updateHomeScreenPeriodic();
             if (tapped) {
                 switch (homeScreenHitTest(M5.Display.width(), M5.Display.height(), touch.x, touch.y)) {
