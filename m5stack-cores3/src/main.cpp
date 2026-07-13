@@ -436,6 +436,9 @@ void loop() {
         Serial.println("[portal] config saved, restarting");
         ESP.restart();
     }
+    // モード分岐は else if で連鎖させる: タップ処理でモードが変わっても、同じループ内で
+    // 遷移先ブロックが同一タップ(wasPressed は次の M5.update() まで立ちっぱなし)を
+    // 二重処理しないようにするため(例: WiFi 設定 → URL QR 画面が開いた瞬間に閉じる)
     if (mode == Mode::CONNECTED) {
         realtimeLoop();
         RealtimeState state = realtimeCurrentState();
@@ -452,8 +455,7 @@ void loop() {
         } else if (M5.Touch.getDetail().wasPressed()) {
             toggleRealtimeConnection();
         }
-    }
-    if (mode == Mode::SETTINGS) {
+    } else if (mode == Mode::SETTINGS) {
         auto touch = M5.Touch.getDetail();
         if (touch.wasPressed()) {
             switch (settingsScreenHitTest(M5.Display.width(), M5.Display.height(), touch.x, touch.y)) {
@@ -472,8 +474,7 @@ void loop() {
                 case SettingsTap::None: break;
             }
         }
-    }
-    if (mode == Mode::SETTINGS_URL_GUIDE) {
+    } else if (mode == Mode::SETTINGS_URL_GUIDE) {
         if (M5.Touch.getDetail().wasPressed()) {
             mode = Mode::SETTINGS;
             drawSettingsScreen();
