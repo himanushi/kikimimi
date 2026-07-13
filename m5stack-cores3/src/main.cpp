@@ -8,6 +8,7 @@
 #include "portal.h"
 #include "pure/home_screen.h"
 #include "pure/portal_screen.h"
+#include "pure/settings_screen.h"
 #include "pure/transcript_view.h"
 #include "pure/usage_cost.h"
 #include "pure/wifi_qr.h"
@@ -15,7 +16,8 @@
 
 namespace {
 
-enum class Mode { PORTAL, CONNECTED };
+// SETTINGS はホーム(Idle)からのみ入り、戻る/WiFi 設定でホーム or ポータルへ抜ける
+enum class Mode { PORTAL, CONNECTED, SETTINGS };
 Mode mode = Mode::PORTAL;
 
 constexpr uint32_t WIFI_CONNECT_TIMEOUT_MS = 15000;
@@ -41,6 +43,7 @@ constexpr int TRANSCRIPT_LINE_HEIGHT = 22;
 constexpr int TRANSCRIPT_WRAP_WIDTH = 18;
 
 String storedApiKey;
+uint8_t currentVolume = CONFIG_DEFAULT_VOLUME;
 String errorMessage;
 double sessionCostJpy = 0.0;
 transcript_view::History transcriptHistory;  // 対話画面の会話履歴。セッション終了(切断)で破棄する
@@ -126,6 +129,57 @@ void updateHomeScreenPeriodic() {
     bool refreshDue = millis() - lastHomeRefreshMs >= HOME_REFRESH_INTERVAL_MS;
     if (minute == lastDrawnMinute && !refreshDue) return;
     drawHomeScreenNow();
+}
+
+// 設定画面(音量 +/-・WiFi 設定導線・戻る)。ホーム画面と同じダーク + ティール配色
+void drawSettingsScreen() {
+    auto& d = M5.Display;
+    int w = d.width();
+    int h = d.height();
+    SettingsLayout layout = settingsScreenLayout(w, h);
+
+    d.startWrite();
+    d.fillScreen(COLOR_BG);
+    d.setFont(&fonts::efontJA_16);
+
+    d.setTextColor(COLOR_TEXT, COLOR_BG);
+    d.setCursor(12, 12);
+    d.print("設定");
+
+    String volumeLabel = "音量: " + String(currentVolume);
+    int volumeLabelWidth = d.textWidth(volumeLabel);
+    d.setCursor((w - volumeLabelWidth) / 2, layout.volumeUpButton.y - 24);
+    d.print(volumeLabel);
+
+    const SettingsRect& vd = layout.volumeDownButton;
+    d.fillRoundRect(vd.x, vd.y, vd.w, vd.h, vd.h / 4, COLOR_ACCENT_DIM);
+    d.setTextColor(COLOR_TEXT, COLOR_ACCENT_DIM);
+    d.setCursor(vd.x + vd.w / 2 - 6, vd.y + vd.h / 2 - 8);
+    d.print("-");
+
+    const SettingsRect& vu = layout.volumeUpButton;
+    d.fillRoundRect(vu.x, vu.y, vu.w, vu.h, vu.h / 4, COLOR_ACCENT_DIM);
+    d.setTextColor(COLOR_TEXT, COLOR_ACCENT_DIM);
+    d.setCursor(vu.x + vu.w / 2 - 6, vu.y + vu.h / 2 - 8);
+    d.print("+");
+
+    const SettingsRect& ws = layout.wifiSetupButton;
+    d.fillRoundRect(ws.x, ws.y, ws.w, ws.h, ws.h / 6, COLOR_ACCENT_DIM);
+    String wifiLabel = "WiFi / API キー設定";
+    int wifiLabelWidth = d.textWidth(wifiLabel);
+    d.setTextColor(COLOR_TEXT, COLOR_ACCENT_DIM);
+    d.setCursor(ws.x + (ws.w - wifiLabelWidth) / 2, ws.y + ws.h / 2 - 8);
+    d.print(wifiLabel);
+
+    const SettingsRect& bb = layout.backButton;
+    d.fillRoundRect(bb.x, bb.y, bb.w, bb.h, bb.h / 6, COLOR_ACCENT);
+    String backLabel = "もどる";
+    int backLabelWidth = d.textWidth(backLabel);
+    d.setTextColor(COLOR_BG, COLOR_ACCENT);
+    d.setCursor(bb.x + (bb.w - backLabelWidth) / 2, bb.y + bb.h / 2 - 8);
+    d.print(backLabel);
+
+    d.endWrite();
 }
 
 bool connectWifi(const StoredConfig& config) {
@@ -245,6 +299,32 @@ void drawForCurrentState() {
     }
 }
 
+// 設定画面に入る。音量変更の確認音を鳴らせるよう Speaker を起動しておく(Mic とは排他)
+void enterSettings() {
+    mode = Mode::SETTINGS;
+    M5.Speaker.begin();
+    M5.Speaker.setVolume(currentVolume);
+    drawSettingsScreen();
+}
+
+void exitSettingsToHome() {
+    M5.Speaker.end();
+    mode = Mode::CONNECTED;
+    drawForCurrentState();
+}
+
+// 音量を即時反映(表示・NVS 保存・確認音)し、対話再開時の再生音量にも反映する
+void applyVolumeChange(int newVolume) {
+    currentVolume = static_cast<uint8_t>(newVolume);
+    M5.Speaker.setVolume(currentVolume);
+    if (!configSaveVolume(currentVolume)) {
+        Serial.println("[settings] volume save failed, will not persist across restart");
+    }
+    realtimeSetSpeakerVolume(currentVolume);
+    M5.Speaker.tone(880, 120);
+    drawSettingsScreen();
+}
+
 RealtimeCallbacks buildRealtimeCallbacks() {
     RealtimeCallbacks cb;
     cb.onStateChanged = [](RealtimeState state) {
@@ -296,6 +376,8 @@ void setup() {
     Serial.begin(115200);
 
     StoredConfig config = configLoad();
+    currentVolume = config.volume;
+    realtimeSetSpeakerVolume(currentVolume);
     if (!config.hasWifi()) {
         startPortal("未設定です");
         return;
@@ -328,12 +410,27 @@ void loop() {
             if (touch.wasPressed()) {
                 switch (homeScreenHitTest(M5.Display.width(), M5.Display.height(), touch.x, touch.y)) {
                     case HomeTap::Talk: toggleRealtimeConnection(); break;
-                    case HomeTap::Settings: startPortal("設定"); break;
+                    case HomeTap::Settings: enterSettings(); break;
                     case HomeTap::None: break;
                 }
             }
         } else if (M5.Touch.getDetail().wasPressed()) {
             toggleRealtimeConnection();
+        }
+    }
+    if (mode == Mode::SETTINGS) {
+        auto touch = M5.Touch.getDetail();
+        if (touch.wasPressed()) {
+            switch (settingsScreenHitTest(M5.Display.width(), M5.Display.height(), touch.x, touch.y)) {
+                case SettingsTap::VolumeUp: applyVolumeChange(settingsVolumeIncrease(currentVolume)); break;
+                case SettingsTap::VolumeDown: applyVolumeChange(settingsVolumeDecrease(currentVolume)); break;
+                case SettingsTap::WifiSetup:
+                    M5.Speaker.end();
+                    startPortal("設定");
+                    break;
+                case SettingsTap::Back: exitSettingsToHome(); break;
+                case SettingsTap::None: break;
+            }
         }
     }
     delay(10);

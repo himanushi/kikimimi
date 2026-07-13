@@ -26,6 +26,9 @@ struct RealtimeCallbacks {
     std::function<void(transcript_view::Speaker speaker, const String& text, bool finalized)> onTranscriptUpdated;
 };
 
+// 応答音声の再生音量(0..255)。次回の Speaker.begin() 時から反映する
+void realtimeSetSpeakerVolume(uint8_t volume);
+
 // WebSocket を開始する。apiKey が空なら接続を試みず ErrorState 通知のみ行う
 void realtimeConnect(const String& apiKey, const String& instructions, RealtimeCallbacks callbacks);
 

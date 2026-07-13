@@ -13,6 +13,7 @@ StoredConfig configLoad() {
     config.ssid = prefs.getString("ssid", "");
     config.pass = prefs.getString("pass", "");
     config.apiKey = prefs.getString("apikey", "");
+    config.volume = prefs.getUChar("volume", CONFIG_DEFAULT_VOLUME);
     prefs.end();
     return config;
 }
@@ -24,6 +25,15 @@ bool configSave(const StoredConfig& config) {
     size_t ssidWritten = prefs.putString("ssid", config.ssid);
     size_t passWritten = prefs.putString("pass", config.pass);
     size_t keyWritten = prefs.putString("apikey", config.apiKey);
+    prefs.putUChar("volume", config.volume);
     prefs.end();
     return ssidWritten > 0 && (config.pass.length() == 0 || passWritten > 0) && keyWritten > 0;
+}
+
+bool configSaveVolume(uint8_t volume) {
+    Preferences prefs;
+    if (!prefs.begin(NVS_NAMESPACE, /*readOnly=*/false)) return false;
+    size_t written = prefs.putUChar("volume", volume);
+    prefs.end();
+    return written > 0;
 }

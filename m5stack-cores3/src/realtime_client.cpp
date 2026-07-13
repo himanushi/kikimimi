@@ -34,6 +34,8 @@ String pendingInstructions;
 // 発火した場合にも「エラーではない」と区別するためのフラグ
 bool disconnectRequested = false;
 
+uint8_t speakerVolume = 128;  // realtimeSetSpeakerVolume() で設定される保存済み音量
+
 int16_t* recordChunkBuf = nullptr;  // CHUNK_SAMPLES 分の録音スクラッチ(PSRAM)
 uint8_t* playbackBuf = nullptr;     // 応答音声の受信バッファ(PSRAM)
 size_t playbackLen = 0;             // 今回の応答でこれまでに貯めたバイト数
@@ -78,6 +80,7 @@ void beginSpeaking() {
         return;
     }
     M5.Speaker.begin();
+    M5.Speaker.setVolume(speakerVolume);
     setState(RealtimeState::Speaking);
     M5.Speaker.playRaw(reinterpret_cast<int16_t*>(playbackBuf), playbackLen / sizeof(int16_t),
                        AUDIO_SAMPLE_RATE, false, 1, 0);
@@ -197,6 +200,10 @@ void onWsEvent(WStype_t type, uint8_t* payload, size_t length) {
 }
 
 }  // namespace
+
+void realtimeSetSpeakerVolume(uint8_t volume) {
+    speakerVolume = volume;
+}
 
 void realtimeConnect(const String& apiKey, const String& instructions, RealtimeCallbacks cb) {
     callbacks = cb;
