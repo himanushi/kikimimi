@@ -110,3 +110,5 @@ bool portalLoop() {
     // 保存応答がブラウザへ届く猶予をとってから再起動を要求する
     return saved && (millis() - savedAtMs > 2000);
 }
+
+int portalStationCount() { return WiFi.softAPgetStationNum(); }

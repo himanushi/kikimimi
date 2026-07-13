@@ -4,6 +4,7 @@
 
 #include "config_store.h"
 #include "portal.h"
+#include "pure/portal_screen.h"
 #include "pure/wifi_qr.h"
 #include "realtime_client.h"
 
@@ -17,6 +18,10 @@ constexpr const char* SESSION_INSTRUCTIONS = "あなたは kikimimi という名
 
 String storedApiKey;
 String errorMessage;
+
+PortalInfo portalInfo;
+String portalReason;
+int lastPortalStationCount = -1;  // -1: 未描画(初回は必ず描画させる)
 
 void drawLines(std::initializer_list<String> lines) {
     auto& d = M5.Display;
@@ -49,8 +54,8 @@ bool connectWifi(const StoredConfig& config) {
     return true;
 }
 
-// 左: テキスト情報 / 右: QR(QR は AP 接続専用。API キーが乗る設定 URL 側は QR 化しない)
-void drawPortalScreen(const String& reason, const PortalInfo& info) {
+// 左: テキスト情報 / 右: QR(QR は AP 接続用)
+void drawApJoinScreen(const String& reason, const PortalInfo& info) {
     drawLines({reason, "スマホで WiFi に接続:", "  " + info.apName,
               "  パスワード: " + info.apPass, "", "ブラウザで開く:", "  " + info.url});
     // テキスト行(x=12 起点)と QR が重ならないよう、QR は画面右端寄せで幅を絞る
@@ -58,11 +63,29 @@ void drawPortalScreen(const String& reason, const PortalInfo& info) {
     M5.Display.qrcode(qrPayload.c_str(), 210, 50, 100);
 }
 
+// AP 接続後の案内。QR のペイロードは URL 文字列そのまま(秘密情報は含まれない)
+void drawUrlGuideScreen(const PortalInfo& info) {
+    drawLines({"接続しました", "ブラウザで設定ページを開く:", "  " + info.url, "", "QR を読み取ってください"});
+    M5.Display.qrcode(info.url.c_str(), 210, 50, 100);
+}
+
+// 接続台数に応じた画面を、直前の描画から変化があったときだけ描き直す
+void updatePortalScreen(int stationCount) {
+    if (stationCount == lastPortalStationCount) return;
+    lastPortalStationCount = stationCount;
+    switch (portalScreenForStationCount(stationCount)) {
+        case PortalScreen::ApJoin: drawApJoinScreen(portalReason, portalInfo); break;
+        case PortalScreen::UrlGuide: drawUrlGuideScreen(portalInfo); break;
+    }
+}
+
 void startPortal(const String& reason) {
-    PortalInfo info = portalStart();
+    portalInfo = portalStart();
+    portalReason = reason;
     // AP パスワードはシリアルに出さない(画面にのみ表示)
-    Serial.printf("[portal] started ap=%s url=%s\n", info.apName.c_str(), info.url.c_str());
-    drawPortalScreen(reason, info);
+    Serial.printf("[portal] started ap=%s url=%s\n", portalInfo.apName.c_str(), portalInfo.url.c_str());
+    lastPortalStationCount = -1;
+    updatePortalScreen(portalStationCount());
     mode = Mode::PORTAL;
 }
 
@@ -130,9 +153,12 @@ void setup() {
 
 void loop() {
     M5.update();
-    if (mode == Mode::PORTAL && portalLoop()) {
-        Serial.println("[portal] config saved, restarting");
-        ESP.restart();
+    if (mode == Mode::PORTAL) {
+        updatePortalScreen(portalStationCount());
+        if (portalLoop()) {
+            Serial.println("[portal] config saved, restarting");
+            ESP.restart();
+        }
     }
     if (mode == Mode::CONNECTED) {
         realtimeLoop();

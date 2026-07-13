@@ -13,3 +13,6 @@ PortalInfo portalStart();
 
 // loop() から毎回呼ぶ。フォーム保存後は true を返し続ける(呼び出し側が再起動する)
 bool portalLoop();
+
+// AP への現在の接続台数(WiFi.softAPgetStationNum())
+int portalStationCount();
