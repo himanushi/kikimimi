@@ -4,6 +4,7 @@
 
 #include "config_store.h"
 #include "portal.h"
+#include "pure/home_screen.h"
 #include "pure/portal_screen.h"
 #include "pure/usage_cost.h"
 #include "pure/wifi_qr.h"
@@ -17,9 +18,24 @@ Mode mode = Mode::PORTAL;
 constexpr uint32_t WIFI_CONNECT_TIMEOUT_MS = 15000;
 constexpr const char* SESSION_INSTRUCTIONS = "あなたは kikimimi という名前の相棒です。短く日本語で応答してください。";
 
+// JST 固定(海外での利用を想定しないため timezone 設定はしない)
+constexpr long NTP_GMT_OFFSET_SEC = 9 * 3600;
+constexpr const char* NTP_SERVER_PRIMARY = "ntp.nict.jp";
+constexpr const char* NTP_SERVER_FALLBACK = "pool.ntp.org";
+
+constexpr uint32_t COLOR_BG = 0x0A0E14;
+constexpr uint32_t COLOR_ACCENT = 0x00C2A8;
+constexpr uint32_t COLOR_ACCENT_DIM = 0x123B38;
+constexpr uint32_t COLOR_TEXT = 0xE6E6E6;
+constexpr uint32_t COLOR_SUBTEXT = 0x6E7681;
+
+constexpr uint32_t HOME_REFRESH_INTERVAL_MS = 30000;  // バッテリー・時計の定期再描画間隔
+
 String storedApiKey;
 String errorMessage;
 double sessionCostJpy = 0.0;
+int lastDrawnMinute = -1;         // -1: 未同期 or 未描画
+uint32_t lastHomeRefreshMs = 0;
 
 PortalInfo portalInfo;
 String portalReason;
@@ -36,6 +52,70 @@ void drawLines(std::initializer_list<String> lines) {
         d.print(line);
         y += 28;
     }
+}
+
+String currentClockLabel() {
+    struct tm t;
+    if (!getLocalTime(&t, 0)) return "--:--";
+    char buf[6];
+    snprintf(buf, sizeof(buf), "%02d:%02d", t.tm_hour, t.tm_min);
+    return String(buf);
+}
+
+// ホーム画面(対話開始ボタン・設定ボタン・バッテリー・時刻)。RealtimeState::Idle のときのみ表示する
+void drawHomeScreen() {
+    auto& d = M5.Display;
+    int w = d.width();
+    int h = d.height();
+    HomeLayout layout = homeScreenLayout(w, h);
+
+    d.startWrite();
+    d.fillScreen(COLOR_BG);
+    d.setFont(&fonts::efontJA_16);
+
+    d.setTextColor(COLOR_SUBTEXT, COLOR_BG);
+    d.setCursor(12, 12);
+    d.printf("%d%%", M5.Power.getBatteryLevel());
+
+    String clock = currentClockLabel();
+    int clockWidth = d.textWidth(clock);
+    d.setCursor(w - clockWidth - 12, 12);
+    d.print(clock);
+
+    const HomeRect& tb = layout.talkButton;
+    d.fillRoundRect(tb.x, tb.y, tb.w, tb.h, tb.w / 6, COLOR_ACCENT);
+    String talkLabel = "はなす";
+    int talkLabelWidth = d.textWidth(talkLabel);
+    d.setTextColor(COLOR_BG, COLOR_ACCENT);
+    d.setCursor(tb.x + (tb.w - talkLabelWidth) / 2, tb.y + tb.h / 2 - 8);
+    d.print(talkLabel);
+
+    const HomeRect& sb = layout.settingsButton;
+    d.fillRoundRect(sb.x, sb.y, sb.w, sb.h, sb.w / 4, COLOR_ACCENT_DIM);
+    String settingsLabel = "設定";
+    int settingsLabelWidth = d.textWidth(settingsLabel);
+    d.setTextColor(COLOR_TEXT, COLOR_ACCENT_DIM);
+    d.setCursor(sb.x + (sb.w - settingsLabelWidth) / 2, sb.y + sb.h / 2 - 8);
+    d.print(settingsLabel);
+
+    d.endWrite();
+}
+
+// ホーム画面を描画し、定期再描画の基準(分・タイマー)を更新する
+void drawHomeScreenNow() {
+    drawHomeScreen();
+    struct tm t;
+    lastDrawnMinute = getLocalTime(&t, 0) ? t.tm_min : -1;
+    lastHomeRefreshMs = millis();
+}
+
+// loop() から毎回呼ぶ。分が変わった、または HOME_REFRESH_INTERVAL_MS 経過したときだけ再描画する
+void updateHomeScreenPeriodic() {
+    struct tm t;
+    int minute = getLocalTime(&t, 0) ? t.tm_min : -1;
+    bool refreshDue = millis() - lastHomeRefreshMs >= HOME_REFRESH_INTERVAL_MS;
+    if (minute == lastDrawnMinute && !refreshDue) return;
+    drawHomeScreenNow();
 }
 
 bool connectWifi(const StoredConfig& config) {
@@ -109,11 +189,20 @@ void drawRealtimeScreen() {
     drawLines({statusLine, "", errorMessage});
 }
 
+// Idle はホーム画面、それ以外(接続中・対話中・エラー)は従来の状態表示画面
+void drawForCurrentState() {
+    if (realtimeCurrentState() == RealtimeState::Idle) {
+        drawHomeScreenNow();
+    } else {
+        drawRealtimeScreen();
+    }
+}
+
 RealtimeCallbacks buildRealtimeCallbacks() {
     RealtimeCallbacks cb;
     cb.onStateChanged = [](RealtimeState state) {
         if (state == RealtimeState::Listening) errorMessage = "";
-        drawRealtimeScreen();
+        drawForCurrentState();
     };
     cb.onError = [](const String& message) {
         errorMessage = message;
@@ -134,7 +223,7 @@ void toggleRealtimeConnection() {
         realtimeConnect(storedApiKey, SESSION_INSTRUCTIONS, buildRealtimeCallbacks());
     } else {
         realtimeDisconnect();
-        drawRealtimeScreen();
+        drawForCurrentState();
     }
 }
 
@@ -154,9 +243,10 @@ void setup() {
         startPortal("WiFi 接続に失敗しました");
         return;
     }
+    configTime(NTP_GMT_OFFSET_SEC, 0, NTP_SERVER_PRIMARY, NTP_SERVER_FALLBACK);
     mode = Mode::CONNECTED;
     storedApiKey = config.apiKey;
-    drawRealtimeScreen();
+    drawForCurrentState();
 }
 
 void loop() {
@@ -170,7 +260,20 @@ void loop() {
     }
     if (mode == Mode::CONNECTED) {
         realtimeLoop();
-        if (M5.Touch.getDetail().wasPressed()) toggleRealtimeConnection();
+        RealtimeState state = realtimeCurrentState();
+        if (state == RealtimeState::Idle) {
+            updateHomeScreenPeriodic();
+            auto touch = M5.Touch.getDetail();
+            if (touch.wasPressed()) {
+                switch (homeScreenHitTest(M5.Display.width(), M5.Display.height(), touch.x, touch.y)) {
+                    case HomeTap::Talk: toggleRealtimeConnection(); break;
+                    case HomeTap::Settings: startPortal("設定"); break;
+                    case HomeTap::None: break;
+                }
+            }
+        } else if (M5.Touch.getDetail().wasPressed()) {
+            toggleRealtimeConnection();
+        }
     }
     delay(10);
 }
