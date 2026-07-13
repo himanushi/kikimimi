@@ -4,12 +4,16 @@
 #include <WebServer.h>
 #include <WiFi.h>
 
+#include <vector>
+
 #include "config_store.h"
 #include "pure/setup_config.h"
+#include "pure/wifi_scan.h"
 
 namespace {
 
 constexpr const char* AP_NAME = "kikimimi-setup";
+constexpr const char* MANUAL_OPTION = "";  // select の値が空 = 手入力欄を使う
 
 DNSServer dnsServer;
 WebServer webServer(80);
@@ -31,7 +35,42 @@ String htmlEscape(const String& s) {
     return out;
 }
 
-String formPage(const String& error, const String& ssid) {
+// 周辺 WiFi の一覧を <select> の選択肢 HTML にする。空 SSID 除外・重複除去・RSSI 降順は純関数側の責務。
+// selectedSsid はバリデーションエラー再表示時に選択状態を保つため(空なら「手入力欄を使う」を選択)
+String scanOptionsHtml(const String& selectedSsid) {
+    int n = WiFi.scanComplete();
+    std::vector<WifiScanEntry> raw;
+    for (int i = 0; i < n; ++i) {
+        raw.push_back({WiFi.SSID(i).c_str(), WiFi.RSSI(i)});
+    }
+    std::vector<WifiScanEntry> entries = dedupeSortWifiScan(raw);
+    String options = String("<option value=\"") + MANUAL_OPTION + "\"" +
+                     (selectedSsid.length() ? "" : " selected") + ">(手入力欄を使う)</option>";
+    for (const auto& e : entries) {
+        String ssid = htmlEscape(String(e.ssid.c_str()));
+        options += "<option value=\"" + ssid + "\"" + (ssid == selectedSsid ? " selected" : "") +
+                  ">" + ssid + " (" + String(e.rssi) + " dBm)</option>";
+    }
+    return options;
+}
+
+// WiFi.scanComplete() の状態に応じて select またはスキャン中メッセージを返す
+String scanSectionHtml(const String& selectedSsid) {
+    int n = WiFi.scanComplete();
+    if (n == WIFI_SCAN_RUNNING) {
+        return "<p>周辺 WiFi をスキャン中です。数秒後にページを再読み込みしてください。"
+               "<a href=\"/\">再読み込み</a></p>";
+    }
+    if (n == WIFI_SCAN_FAILED) {
+        WiFi.scanNetworks(true);  // 未実行または失敗: 非同期で開始し、結果は次回読み込みで表示する
+        return "<p>周辺 WiFi をスキャン中です。数秒後にページを再読み込みしてください。"
+               "<a href=\"/\">再読み込み</a></p>";
+    }
+    return "<p><label>周辺の WiFi<br><select name=\"ssid_select\">" + scanOptionsHtml(selectedSsid) +
+          "</select></label> <a href=\"/rescan\">再スキャン</a></p>";
+}
+
+String formPage(const String& error, const String& ssid, const String& selectedSsid) {
     String page =
         "<!DOCTYPE html><html lang=\"ja\"><head><meta charset=\"utf-8\">"
         "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
@@ -39,8 +78,9 @@ String formPage(const String& error, const String& ssid) {
         "<h1>kikimimi 初期設定</h1>";
     if (error.length()) page += "<p style=\"color:red\">" + htmlEscape(error) + "</p>";
     page +=
-        "<form method=\"POST\" action=\"/save\">"
-        "<p><label>WiFi SSID<br><input name=\"ssid\" value=\"" + htmlEscape(ssid) + "\"></label></p>"
+        "<form method=\"POST\" action=\"/save\">" + scanSectionHtml(selectedSsid) +
+        "<p><label>WiFi SSID 手入力(一覧にない場合)<br>"
+        "<input name=\"ssid\" value=\"" + htmlEscape(ssid) + "\"></label></p>"
         "<p><label>WiFi パスワード<br><input name=\"pass\" type=\"password\"></label></p>"
         "<p><label>OpenAI API キー<br><input name=\"apikey\" autocomplete=\"off\"></label></p>"
         "<p><button type=\"submit\">保存して再起動</button></p>"
@@ -48,14 +88,24 @@ String formPage(const String& error, const String& ssid) {
     return page;
 }
 
-void handleRoot() { webServer.send(200, "text/html", formPage("", "")); }
+void handleRoot() { webServer.send(200, "text/html", formPage("", "", "")); }
+
+void handleRescan() {
+    WiFi.scanNetworks(true);
+    webServer.sendHeader("Location", "/");
+    webServer.send(302, "text/plain", "");
+}
 
 void handleSave() {
-    SetupValidation r = validateSetupInput(webServer.arg("ssid").c_str(),
+    // 手入力が優先: 手入力欄が空のときだけ select の選択値を使う
+    String manualSsid = webServer.arg("ssid");
+    String selectSsid = webServer.arg("ssid_select");
+    String ssid = manualSsid.length() ? manualSsid : selectSsid;
+    SetupValidation r = validateSetupInput(ssid.c_str(),
                                            webServer.arg("pass").c_str(),
                                            webServer.arg("apikey").c_str());
     if (!r.ok) {
-        webServer.send(200, "text/html", formPage(r.error.c_str(), webServer.arg("ssid")));
+        webServer.send(200, "text/html", formPage(r.error.c_str(), manualSsid, selectSsid));
         return;
     }
     StoredConfig config;
@@ -94,10 +144,13 @@ static String generateApPass() {
 
 PortalInfo portalStart() {
     String apPass = generateApPass();
-    WiFi.mode(WIFI_AP);
+    // AP_STA: 同期スキャン(WIFI_STA 単体)は SoftAP を止めてしまうため、AP を維持したまま STA 側でスキャンする
+    WiFi.mode(WIFI_AP_STA);
     WiFi.softAP(AP_NAME, apPass.c_str());
+    WiFi.scanNetworks(true);  // 非同期スキャン開始。結果は handleRoot が WiFi.scanComplete() で取得する
     dnsServer.start(53, "*", WiFi.softAPIP());
     webServer.on("/", HTTP_GET, handleRoot);
+    webServer.on("/rescan", HTTP_GET, handleRescan);
     webServer.on("/save", HTTP_POST, handleSave);
     webServer.onNotFound(handleNotFound);
     webServer.begin();
