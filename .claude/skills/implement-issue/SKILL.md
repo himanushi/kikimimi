@@ -1,6 +1,6 @@
 ---
 name: implement-issue
-description: issues/NNNNN/plan.md に基づいて実装する。TDD(red→green)→ 自己検証 → コードレビュー → 記録 → ADR 昇格判断 → コミットまでを 1 サイクルで行う。
+description: issues/NNNNN/plan.md に基づいて実装する。TDD(red→green)→ 自己検証 → コードレビュー → 記録(result.md)→ ADR 昇格判断 → コミットまでを 1 サイクルで行う。
 ---
 
 # issue の実装
@@ -20,7 +20,6 @@ description: issues/NNNNN/plan.md に基づいて実装する。TDD(red→green)
 - **テストが落ちることを確認する(red)**。落ちなければテストが間違っている
 - 最小の実装で green にする。green 後に必要ならリファクタ
 - ファームウェアでテスト困難な部分: ロジックは純関数に分離してホスト側でテストし、ハードウェア依存部は実機確認(証拠つき)で代替する
-- 実装中、方針を選んだ・変えた・ハマったタイミングで `issues/NNNNN/log.md` に追記する(→ 手順 5)
 
 ### 3. 自己検証
 
@@ -42,18 +41,20 @@ description: issues/NNNNN/plan.md に基づいて実装する。TDD(red→green)
 
 ### 5. 記録
 
-- `issues/NNNNN/log.md`: **この issue をどう進めたかの進行ログ**。試した方針とその結果、途中の判断と「なぜそうしたか」、ハマった点。実装中に随時追記し、ここで整える
-- `issues/NNNNN/result.md`: 実装報告。受け入れ基準をどう検証したか(証拠)、plan からの逸脱とその理由、レビュー指摘と対応
-- ハマった点のうち**次の issue でも踏みそうなもの**は `knowhow/<カテゴリ>-<スラッグ>.md` に 1 件 1 ファイルで蒸留する(log.md からはリンクで参照)
-- 書くことがないファイルは作らない(空の log.md / result.md を儀式として置かない)
+- `issues/NNNNN/result.md`: 実装報告。次の 3 点を書く:
+  1. **検証の証跡**: 受け入れ基準をどう検証したか
+  2. **判断と経緯**: 途中で選んだ・変えた方針と「なぜそうしたか」、plan からの逸脱とその理由
+  3. **レビュー指摘と対応**
+- ハマった点のうち**次の issue でも踏みそうなもの**は `knowhow/<カテゴリ>-<スラッグ>.md` に 1 件 1 ファイルで蒸留する(result.md からはリンクで参照)
+- 進行の経過はコミット履歴が記録する。repo が既に記録していることを result.md に書き写さない
 - `docs/ROADMAP.md` があれば該当項目を更新
 
 ### 6. ADR 昇格判断
 
-result.md を書き終えたら、log.md の判断を見返して問う: **「この判断は今後の issue でも前提になるか?」**
+result.md の「判断と経緯」を見返して問う: **「この判断は今後の issue でも前提になるか?」**
 
-- Yes(ツール選定・構成・方式など、プロジェクト共通の概念になった)→ `docs/decisions/` に ADR を追記し、log.md から ADR 番号を参照する
-- No(この issue 限りの判断)→ log.md に残したままでよい
+- Yes(ツール選定・構成・方式など、プロジェクト共通の概念になった)→ `docs/decisions/` に ADR を追記し、result.md から ADR 番号を参照する
+- No(この issue 限りの判断)→ result.md に残したままでよい
 
 ### 7. コミット
 
