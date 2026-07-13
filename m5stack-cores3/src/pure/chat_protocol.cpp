@@ -8,21 +8,21 @@ std::string buildChatRequest(const std::string& model, const std::string& system
                               const History& history, const std::string& userText) {
     JsonDocument doc;
     doc["model"] = model;
-    JsonArray messages = doc["messages"].to<JsonArray>();
+    doc["instructions"] = systemInstructions;
 
-    JsonObject system = messages.add<JsonObject>();
-    system["role"] = "system";
-    system["content"] = systemInstructions;
-
+    JsonArray input = doc["input"].to<JsonArray>();
     for (const auto& m : history) {
-        JsonObject entry = messages.add<JsonObject>();
+        JsonObject entry = input.add<JsonObject>();
         entry["role"] = m.role;
         entry["content"] = m.content;
     }
-
-    JsonObject user = messages.add<JsonObject>();
+    JsonObject user = input.add<JsonObject>();
     user["role"] = "user";
     user["content"] = userText;
+
+    JsonArray tools = doc["tools"].to<JsonArray>();
+    JsonObject webSearch = tools.add<JsonObject>();
+    webSearch["type"] = "web_search";
 
     std::string out;
     serializeJson(doc, out);
@@ -34,16 +34,29 @@ ChatResponse parseChatResponse(const std::string& json) {
     JsonDocument doc;
     if (deserializeJson(doc, json)) return resp;  // 壊れた JSON は ok=false のまま
 
-    JsonVariantConst content = doc["choices"][0]["message"]["content"];
-    if (content.isNull() || !content.is<const char*>()) return resp;
+    JsonArrayConst output = doc["output"];
+    std::string content;
+    bool foundMessage = false;
+    for (JsonObjectConst item : output) {
+        const char* type = item["type"] | "";
+        if (std::string(type) != "message") continue;  // web_search_call 等は本文を持たないので無視
+        foundMessage = true;
+        for (JsonObjectConst part : item["content"].as<JsonArrayConst>()) {
+            const char* partType = part["type"] | "";
+            if (std::string(partType) != "output_text") continue;
+            const char* text = part["text"] | "";
+            content += text;
+        }
+    }
+    if (!foundMessage) return resp;  // message アイテムが無ければ本文なしとみなす
 
     resp.ok = true;
-    resp.content = std::string(content.as<const char*>());
+    resp.content = content;
 
     JsonObjectConst usage = doc["usage"];
-    resp.usage.promptTokens = usage["prompt_tokens"] | 0L;
-    resp.usage.completionTokens = usage["completion_tokens"] | 0L;
-    resp.usage.cachedTokens = usage["prompt_tokens_details"]["cached_tokens"] | 0L;
+    resp.usage.promptTokens = usage["input_tokens"] | 0L;
+    resp.usage.completionTokens = usage["output_tokens"] | 0L;
+    resp.usage.cachedTokens = usage["input_tokens_details"]["cached_tokens"] | 0L;
 
     return resp;
 }

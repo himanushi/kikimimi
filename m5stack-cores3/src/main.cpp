@@ -26,7 +26,9 @@ enum class Mode { PORTAL, CONNECTED, SETTINGS, SETTINGS_URL_GUIDE };
 Mode mode = Mode::PORTAL;
 
 constexpr uint32_t WIFI_CONNECT_TIMEOUT_MS = 15000;
-constexpr const char* SESSION_INSTRUCTIONS = "あなたは kikimimi という名前の相棒です。短く日本語で応答してください。";
+constexpr const char* SESSION_INSTRUCTIONS =
+    "あなたは kikimimi という名前の相棒です。短く日本語で応答してください。"
+    "音声で読み上げるため、URL や出典の列挙はしないでください。最新情報が必要なら検索してよいです。";
 
 // JST 固定(海外での利用を想定しないため timezone 設定はしない)
 constexpr long NTP_GMT_OFFSET_SEC = 9 * 3600;

@@ -43,9 +43,10 @@ constexpr size_t TTS_MAX_BYTES = TTS_SAMPLE_RATE * TTS_MAX_SECONDS * sizeof(int1
 constexpr vad::Config VAD_CONFIG{/*startThreshold=*/900, /*minSpeechMs=*/200, /*hangoverMs=*/700};
 
 // デフォルトの 5 秒では STT(音声アップロード)・TTS(長文合成)が途中で切れうるため、
-// 各段ごとに余裕を持ったタイムアウトを明示する
+// 各段ごとに余裕を持ったタイムアウトを明示する。CHAT は web_search 実行時に検索分の
+// 待ち時間が乗るため他段より長く取る
 constexpr uint32_t STT_TIMEOUT_MS = 15000;
-constexpr uint32_t CHAT_TIMEOUT_MS = 20000;
+constexpr uint32_t CHAT_TIMEOUT_MS = 30000;
 constexpr uint32_t TTS_TIMEOUT_MS = 20000;
 
 VoicePipelineState state = VoicePipelineState::Idle;
@@ -187,7 +188,7 @@ ChatResult callChatApi(const String& apiKey, const String& instructions, const S
 
     HTTPClient http;
     http.setTimeout(CHAT_TIMEOUT_MS);
-    if (!beginHttp(http, "/v1/chat/completions")) {
+    if (!beginHttp(http, "/v1/responses")) {
         result.errorMessage = "接続できませんでした";
         return result;
     }
