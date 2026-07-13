@@ -13,12 +13,10 @@ enum class Mode { PORTAL, CONNECTED };
 Mode mode = Mode::PORTAL;
 
 constexpr uint32_t WIFI_CONNECT_TIMEOUT_MS = 15000;
-// 会話履歴の保存・知識蓄積は範囲外(00002 は接続確認が目的)。往復確認用の固定メッセージ
-constexpr const char* GREETING_MESSAGE = "こんにちは";
 constexpr const char* SESSION_INSTRUCTIONS = "あなたは kikimimi という名前の相棒です。短く日本語で応答してください。";
 
 String storedApiKey;
-String responseText;
+String errorMessage;
 
 void drawLines(std::initializer_list<String> lines) {
     auto& d = M5.Display;
@@ -72,30 +70,28 @@ String realtimeStateLabel(RealtimeState state) {
     switch (state) {
         case RealtimeState::Idle: return "タップで対話を開始";
         case RealtimeState::Connecting: return "接続中...";
-        case RealtimeState::Established: return "会話できます(タップで終了)";
+        case RealtimeState::Listening: return "聞いています(タップで終了)";
+        case RealtimeState::Thinking: return "考えています...";
+        case RealtimeState::Speaking: return "話しています...";
         case RealtimeState::ErrorState: return "エラー(タップで再試行)";
     }
     return "";
 }
 
 void drawRealtimeScreen() {
-    drawLines({realtimeStateLabel(realtimeCurrentState()), "", responseText});
+    drawLines({realtimeStateLabel(realtimeCurrentState()), "", errorMessage});
 }
 
 RealtimeCallbacks buildRealtimeCallbacks() {
     RealtimeCallbacks cb;
     cb.onStateChanged = [](RealtimeState state) {
-        if (state == RealtimeState::Established) {
-            responseText = "";
-            realtimeSendUserMessage(GREETING_MESSAGE);
-        }
+        if (state == RealtimeState::Listening) errorMessage = "";
         drawRealtimeScreen();
     };
-    cb.onResponseTextDelta = [](const String& delta) {
-        responseText += delta;
+    cb.onError = [](const String& message) {
+        errorMessage = message;
         drawRealtimeScreen();
     };
-    cb.onError = [](const String& message) { responseText = message; };
     return cb;
 }
 

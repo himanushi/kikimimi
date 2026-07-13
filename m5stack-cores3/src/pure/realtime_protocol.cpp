@@ -11,8 +11,22 @@ std::string buildSessionUpdateEvent(const std::string& instructions) {
     session["type"] = "realtime";
     session["model"] = "gpt-realtime";
     JsonArray modalities = session["output_modalities"].to<JsonArray>();
-    modalities.add("text");
+    modalities.add("audio");
     session["instructions"] = instructions;
+
+    JsonObject audio = session["audio"].to<JsonObject>();
+    JsonObject input = audio["input"].to<JsonObject>();
+    JsonObject inputFormat = input["format"].to<JsonObject>();
+    inputFormat["type"] = "audio/pcm";
+    inputFormat["rate"] = 24000;
+    // 発話の切れ目はサーバ側 VAD に任せる(push-to-talk にしない。00003 plan)
+    JsonObject turnDetection = input["turn_detection"].to<JsonObject>();
+    turnDetection["type"] = "semantic_vad";
+
+    JsonObject output = audio["output"].to<JsonObject>();
+    JsonObject outputFormat = output["format"].to<JsonObject>();
+    outputFormat["type"] = "audio/pcm";
+    output["voice"] = "marin";
 
     std::string out;
     serializeJson(doc, out);
@@ -44,6 +58,16 @@ std::string buildResponseCreateEvent() {
     return out;
 }
 
+std::string buildInputAudioAppendEvent(const std::string& base64Audio) {
+    JsonDocument doc;
+    doc["type"] = "input_audio_buffer.append";
+    doc["audio"] = base64Audio;
+
+    std::string out;
+    serializeJson(doc, out);
+    return out;
+}
+
 ServerEvent parseServerEvent(const std::string& json) {
     ServerEvent ev;
     JsonDocument doc;
@@ -57,6 +81,13 @@ ServerEvent parseServerEvent(const std::string& json) {
     } else if (std::string(type) == "response.output_text.delta") {
         ev.type = ServerEventType::ResponseOutputTextDelta;
         ev.textDelta = std::string(doc["delta"] | "");
+    } else if (std::string(type) == "response.output_audio.delta") {
+        ev.type = ServerEventType::ResponseOutputAudioDelta;
+        ev.audioDelta = std::string(doc["delta"] | "");
+    } else if (std::string(type) == "input_audio_buffer.speech_started") {
+        ev.type = ServerEventType::SpeechStarted;
+    } else if (std::string(type) == "input_audio_buffer.speech_stopped") {
+        ev.type = ServerEventType::SpeechStopped;
     } else if (std::string(type) == "response.done") {
         ev.type = ServerEventType::ResponseDone;
     } else if (std::string(type) == "error") {
