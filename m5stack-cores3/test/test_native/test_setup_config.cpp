@@ -41,6 +41,17 @@ static void test_password_shorter_than_wpa2_minimum_is_rejected() {
     TEST_ASSERT_FALSE(r.ok);
 }
 
+static void test_password_at_wpa2_minimum_is_accepted() {
+    SetupValidation r = validateSetupInput("home-wifi", "exactly8", VALID_KEY);
+    TEST_ASSERT_TRUE(r.ok);
+}
+
+static void test_api_key_at_maximum_length_is_accepted() {
+    SetupValidation r = validateSetupInput("home-wifi", "password123",
+                                           "sk-" + std::string(509, 'a'));
+    TEST_ASSERT_TRUE(r.ok);
+}
+
 static void test_password_longer_than_wpa2_maximum_is_rejected() {
     SetupValidation r = validateSetupInput("home-wifi", std::string(64, 'p'), VALID_KEY);
     TEST_ASSERT_FALSE(r.ok);
@@ -75,6 +86,8 @@ int main() {
     RUN_TEST(test_ssid_longer_than_32_bytes_is_rejected);
     RUN_TEST(test_open_network_empty_password_is_accepted);
     RUN_TEST(test_password_shorter_than_wpa2_minimum_is_rejected);
+    RUN_TEST(test_password_at_wpa2_minimum_is_accepted);
+    RUN_TEST(test_api_key_at_maximum_length_is_accepted);
     RUN_TEST(test_password_longer_than_wpa2_maximum_is_rejected);
     RUN_TEST(test_api_key_without_sk_prefix_is_rejected);
     RUN_TEST(test_too_short_api_key_is_rejected);
