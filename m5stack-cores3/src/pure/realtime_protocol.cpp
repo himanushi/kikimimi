@@ -26,6 +26,7 @@ std::string buildSessionUpdateEvent(const std::string& instructions) {
     JsonObject output = audio["output"].to<JsonObject>();
     JsonObject outputFormat = output["format"].to<JsonObject>();
     outputFormat["type"] = "audio/pcm";
+    outputFormat["rate"] = 24000;  // 入力側と同様に必須(欠けると session.update がエラーになる)
     output["voice"] = "marin";
 
     std::string out;

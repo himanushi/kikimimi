@@ -31,9 +31,13 @@ static void test_session_update_event_configures_audio_io_with_instructions() {
     TEST_ASSERT_TRUE(contains(json, "\"model\":\"gpt-realtime\""));
     TEST_ASSERT_TRUE(contains(json, "\"output_modalities\":[\"audio\"]"));
     TEST_ASSERT_TRUE(contains(json, "\"instructions\":\"あなたは相棒です\""));
-    // 入力: PCM16 24kHz + semantic_vad(サーバ側 VAD に任せ、push-to-talk にしない)
-    TEST_ASSERT_TRUE(contains(json, "\"type\":\"audio/pcm\""));
-    TEST_ASSERT_TRUE(contains(json, "\"rate\":24000"));
+    // 入出力とも PCM16 24kHz。rate は入力・出力の両方で必須
+    // (出力側が欠けると API が "missing required parameter: session.audio.output.format.rate" を返す)
+    size_t first = json.find("\"format\":{\"type\":\"audio/pcm\",\"rate\":24000}");
+    TEST_ASSERT_TRUE(first != std::string::npos);
+    TEST_ASSERT_TRUE(json.find("\"format\":{\"type\":\"audio/pcm\",\"rate\":24000}", first + 1) !=
+                     std::string::npos);
+    // semantic_vad(サーバ側 VAD に任せ、push-to-talk にしない)
     TEST_ASSERT_TRUE(contains(json, "\"turn_detection\":{\"type\":\"semantic_vad\"}"));
 }
 
