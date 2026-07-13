@@ -4,6 +4,7 @@
 
 #include "config_store.h"
 #include "portal.h"
+#include "pure/wifi_qr.h"
 #include "realtime_client.h"
 
 namespace {
@@ -50,12 +51,20 @@ bool connectWifi(const StoredConfig& config) {
     return true;
 }
 
+// 左: テキスト情報 / 右: QR(QR は AP 接続専用。API キーが乗る設定 URL 側は QR 化しない)
+void drawPortalScreen(const String& reason, const PortalInfo& info) {
+    drawLines({reason, "スマホで WiFi に接続:", "  " + info.apName,
+              "  パスワード: " + info.apPass, "", "ブラウザで開く:", "  " + info.url});
+    // テキスト行(x=12 起点)と QR が重ならないよう、QR は画面右端寄せで幅を絞る
+    std::string qrPayload = buildWifiQrPayload(info.apName.c_str(), info.apPass.c_str());
+    M5.Display.qrcode(qrPayload.c_str(), 210, 50, 100);
+}
+
 void startPortal(const String& reason) {
     PortalInfo info = portalStart();
     // AP パスワードはシリアルに出さない(画面にのみ表示)
     Serial.printf("[portal] started ap=%s url=%s\n", info.apName.c_str(), info.url.c_str());
-    drawLines({reason, "スマホで WiFi に接続:", "  " + info.apName + " / " + info.apPass,
-               "ブラウザで開く:", "  " + info.url});
+    drawPortalScreen(reason, info);
     mode = Mode::PORTAL;
 }
 
