@@ -127,6 +127,18 @@ void handleFrame(const char* payload) {
             }
             break;
         }
+        case realtime_protocol::ServerEventType::OutputAudioTranscriptDelta:
+            if (callbacks.onTranscriptUpdated) {
+                callbacks.onTranscriptUpdated(transcript_view::Speaker::Assistant,
+                                              ev.transcriptDelta.c_str(), false);
+            }
+            break;
+        case realtime_protocol::ServerEventType::InputTranscriptionCompleted:
+            if (callbacks.onTranscriptUpdated) {
+                callbacks.onTranscriptUpdated(transcript_view::Speaker::User, ev.transcriptText.c_str(),
+                                              true);
+            }
+            break;
         case realtime_protocol::ServerEventType::SpeechStarted:
             Serial.println("[realtime] speech_started");
             break;
@@ -138,6 +150,9 @@ void handleFrame(const char* payload) {
             Serial.println("[realtime] response.done");
             sessionCostJpy += usage_cost::calculateCostJpy(ev.usage);
             if (callbacks.onCostUpdated) callbacks.onCostUpdated(sessionCostJpy);
+            if (callbacks.onTranscriptUpdated) {
+                callbacks.onTranscriptUpdated(transcript_view::Speaker::Assistant, "", true);
+            }
             if (state == RealtimeState::Thinking) beginSpeaking();
             break;
         case realtime_protocol::ServerEventType::Error:

@@ -5,6 +5,8 @@
 #include <Arduino.h>
 #include <functional>
 
+#include "pure/transcript_view.h"
+
 enum class RealtimeState {
     Idle,          // 未接続(タップ待ち)
     Connecting,    // WebSocket 接続中〜session.updated 待ち
@@ -19,6 +21,9 @@ struct RealtimeCallbacks {
     std::function<void(RealtimeState)> onStateChanged;
     std::function<void(const String& message)> onError;
     std::function<void(double sessionCostJpy)> onCostUpdated;
+    // 発話の書き起こし更新。finalized=false はアシスタント delta の逐次追記、true は発話確定
+    // (ユーザー発話は常に確定済みの全文で一度だけ、アシスタント発話は確定時に空文字で通知する)
+    std::function<void(transcript_view::Speaker speaker, const String& text, bool finalized)> onTranscriptUpdated;
 };
 
 // WebSocket を開始する。apiKey が空なら接続を試みず ErrorState 通知のみ行う

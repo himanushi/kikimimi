@@ -23,6 +23,8 @@ enum class ServerEventType {
     SessionUpdated,
     ResponseOutputTextDelta,
     ResponseOutputAudioDelta,
+    OutputAudioTranscriptDelta,     // response.output_audio_transcript.delta(アシスタント発話の書き起こし)
+    InputTranscriptionCompleted,    // conversation.item.input_audio_transcription.completed(ユーザー発話の確定書き起こし)
     SpeechStarted,
     SpeechStopped,
     ResponseDone,
@@ -43,9 +45,11 @@ struct UsageTokens {
 
 struct ServerEvent {
     ServerEventType type = ServerEventType::Unknown;
-    std::string textDelta;     // ResponseOutputTextDelta のとき、追加されたテキスト断片
-    std::string audioDelta;    // ResponseOutputAudioDelta のとき、base64 化された PCM16 断片
-    std::string errorMessage;  // Error のとき、表示用メッセージ
+    std::string textDelta;       // ResponseOutputTextDelta のとき、追加されたテキスト断片
+    std::string audioDelta;      // ResponseOutputAudioDelta のとき、base64 化された PCM16 断片
+    std::string transcriptDelta; // OutputAudioTranscriptDelta のとき、追加された書き起こし断片
+    std::string transcriptText;  // InputTranscriptionCompleted のとき、確定した書き起こし全文
+    std::string errorMessage;    // Error のとき、表示用メッセージ
     UsageTokens usage;         // ResponseDone のとき、response.usage のトークン内訳
 };
 

@@ -11,12 +11,12 @@
 
 ## 受け入れ基準
 
-- [ ] `parseServerEvent` が `response.output_audio_transcript.delta`(delta 抽出)と `conversation.item.input_audio_transcription.completed`(transcript 抽出)を解釈する(検証: native テスト。先に red を確認)
-- [ ] `buildSessionUpdateEvent` の JSON に `input.transcription.model = "gpt-4o-mini-transcribe"` が含まれる(検証: native テスト。先に red)
-- [ ] 会話履歴の保持・行折り返し・表示行の選択(最新 N 行)が純関数 `src/pure/transcript_view.*` に分離されテストされる(検証: `uvx --from platformio pio test -e native` green)
-- [ ] 対話中の画面に、ユーザー発話(例: 「あなた: …」)とアシスタント応答(例: 「kikimimi: …」、delta 逐次追記)が表示される(検証: 実機で会話して目視)
-- [ ] 状態ラベルと累計金額(¥)の表示は維持される(検証: 実機)
-- [ ] cores3 ビルドが通る(検証: `uvx --from platformio pio run -e cores3` SUCCESS)
+- [x] `parseServerEvent` が `response.output_audio_transcript.delta`(delta 抽出)と `conversation.item.input_audio_transcription.completed`(transcript 抽出)を解釈する(検証: native テスト。先に red を確認)
+- [x] `buildSessionUpdateEvent` の JSON に `input.transcription.model = "gpt-4o-mini-transcribe"` が含まれる(検証: native テスト。先に red)
+- [x] 会話履歴の保持・行折り返し・表示行の選択(最新 N 行)が純関数 `src/pure/transcript_view.*` に分離されテストされる(検証: `uvx --from platformio pio test -e native` green)
+- [ ] 対話中の画面に、ユーザー発話(例: 「あなた: …」)とアシスタント応答(例: 「kikimimi: …」、delta 逐次追記)が表示される(検証: 実機で会話して目視。**未検証、実機確認待ち**)
+- [ ] 状態ラベルと累計金額(¥)の表示は維持される(検証: 実機。**未検証、実機確認待ち**)
+- [x] cores3 ビルドが通る(検証: `uvx --from platformio pio run -e cores3` SUCCESS)
 
 ## やらないこと
 

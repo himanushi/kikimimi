@@ -2,10 +2,13 @@
 #include <M5Unified.h>
 #include <WiFi.h>
 
+#include <algorithm>
+
 #include "config_store.h"
 #include "portal.h"
 #include "pure/home_screen.h"
 #include "pure/portal_screen.h"
+#include "pure/transcript_view.h"
 #include "pure/usage_cost.h"
 #include "pure/wifi_qr.h"
 #include "realtime_client.h"
@@ -31,9 +34,16 @@ constexpr uint32_t COLOR_SUBTEXT = 0x6E7681;
 
 constexpr uint32_t HOME_REFRESH_INTERVAL_MS = 30000;  // バッテリー・時計の定期再描画間隔
 
+// 対話画面のレイアウト。上部: 状態 + 累計金額、下部: 会話テキスト
+constexpr int TRANSCRIPT_TOP_Y = 60;
+constexpr int TRANSCRIPT_LINE_HEIGHT = 22;
+// efontJA_16 は全角 16px 相当。画面幅 320px・左右マージン込みで概算した折り返し文字数
+constexpr int TRANSCRIPT_WRAP_WIDTH = 18;
+
 String storedApiKey;
 String errorMessage;
 double sessionCostJpy = 0.0;
+transcript_view::History transcriptHistory;  // 対話画面の会話履歴。セッション終了(切断)で破棄する
 int lastDrawnMinute = -1;         // -1: 未同期 or 未描画
 uint32_t lastHomeRefreshMs = 0;
 
@@ -183,13 +193,50 @@ String realtimeStateLabel(RealtimeState state) {
     return "";
 }
 
-void drawRealtimeScreen() {
+// 状態ラベル・累計金額・エラーメッセージ(画面上部)のみを再描画する
+void drawStatusArea() {
+    auto& d = M5.Display;
+    d.startWrite();
+    d.fillRect(0, 0, d.width(), TRANSCRIPT_TOP_Y, TFT_BLACK);
+    d.setFont(&fonts::efontJA_16);
+    d.setTextColor(TFT_WHITE, TFT_BLACK);
     String statusLine = realtimeStateLabel(realtimeCurrentState()) + "  " +
                          usage_cost::formatJpyLabel(sessionCostJpy).c_str();
-    drawLines({statusLine, "", errorMessage});
+    d.setCursor(12, 12);
+    d.print(statusLine);
+    if (errorMessage.length() > 0) {
+        d.setCursor(12, 34);
+        d.print(errorMessage);
+    }
+    d.endWrite();
 }
 
-// Idle はホーム画面、それ以外(接続中・対話中・エラー)は従来の状態表示画面
+// 会話テキスト(画面下部)のみを再描画する。delta 到着ごとに呼ばれるためこの領域だけ更新し、
+// 状態エリアの再描画・全画面クリアはしない(チラつき抑制)
+void drawTranscriptArea() {
+    auto& d = M5.Display;
+    int h = d.height();
+    d.startWrite();
+    d.fillRect(0, TRANSCRIPT_TOP_Y, d.width(), h - TRANSCRIPT_TOP_Y, TFT_BLACK);
+    d.setFont(&fonts::efontJA_16);
+    d.setTextColor(TFT_WHITE, TFT_BLACK);
+    int maxLines = std::max(1, (h - TRANSCRIPT_TOP_Y) / TRANSCRIPT_LINE_HEIGHT);
+    auto lines = transcript_view::renderLines(transcriptHistory, TRANSCRIPT_WRAP_WIDTH, maxLines);
+    int y = TRANSCRIPT_TOP_Y;
+    for (const auto& line : lines) {
+        d.setCursor(12, y);
+        d.print(String(line.c_str()));
+        y += TRANSCRIPT_LINE_HEIGHT;
+    }
+    d.endWrite();
+}
+
+void drawRealtimeScreen() {
+    drawStatusArea();
+    drawTranscriptArea();
+}
+
+// Idle はホーム画面、それ以外(接続中・対話中・エラー)は状態 + 会話テキストの画面
 void drawForCurrentState() {
     if (realtimeCurrentState() == RealtimeState::Idle) {
         drawHomeScreenNow();
@@ -210,7 +257,20 @@ RealtimeCallbacks buildRealtimeCallbacks() {
     };
     cb.onCostUpdated = [](double jpy) {
         sessionCostJpy = jpy;
-        drawRealtimeScreen();
+        drawStatusArea();
+    };
+    cb.onTranscriptUpdated = [](transcript_view::Speaker speaker, const String& text, bool finalized) {
+        if (speaker == transcript_view::Speaker::User) {
+            transcriptHistory = transcript_view::appendUserUtterance(transcriptHistory, text.c_str());
+        } else {
+            if (text.length() > 0) {
+                transcriptHistory = transcript_view::appendAssistantDelta(transcriptHistory, text.c_str());
+            }
+            if (finalized) {
+                transcriptHistory = transcript_view::finalizeAssistant(transcriptHistory);
+            }
+        }
+        drawTranscriptArea();
     };
     return cb;
 }
@@ -220,6 +280,7 @@ void toggleRealtimeConnection() {
     if (state == RealtimeState::Idle || state == RealtimeState::ErrorState) {
         Serial.printf("[realtime] free heap=%u free psram=%u\n", ESP.getFreeHeap(),
                      ESP.getFreePsram());
+        transcriptHistory.clear();
         realtimeConnect(storedApiKey, SESSION_INSTRUCTIONS, buildRealtimeCallbacks());
     } else {
         realtimeDisconnect();

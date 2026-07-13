@@ -39,6 +39,8 @@ static void test_session_update_event_configures_audio_io_with_instructions() {
                      std::string::npos);
     // semantic_vad(サーバ側 VAD に任せ、push-to-talk にしない)
     TEST_ASSERT_TRUE(contains(json, "\"turn_detection\":{\"type\":\"semantic_vad\"}"));
+    // ユーザー発話の書き起こし(conversation.item.input_audio_transcription.completed を得るため)
+    TEST_ASSERT_TRUE(contains(json, "\"transcription\":{\"model\":\"gpt-4o-mini-transcribe\"}"));
 }
 
 static void test_input_audio_append_event_wraps_base64_audio() {
@@ -88,6 +90,22 @@ static void test_parse_response_output_audio_delta_extracts_base64() {
         R"({"type":"response.output_audio.delta","item_id":"msg_1","delta":"QUJD"})");
     TEST_ASSERT_TRUE(ev.type == ServerEventType::ResponseOutputAudioDelta);
     TEST_ASSERT_EQUAL_STRING("QUJD", ev.audioDelta.c_str());
+}
+
+// 音声応答の書き起こし delta(無料で流れてくる。issue 00009)
+static void test_parse_response_output_audio_transcript_delta_extracts_delta() {
+    auto ev = parseServerEvent(
+        R"({"type":"response.output_audio_transcript.delta","item_id":"msg_1","delta":"こんにちは"})");
+    TEST_ASSERT_TRUE(ev.type == ServerEventType::OutputAudioTranscriptDelta);
+    TEST_ASSERT_EQUAL_STRING("こんにちは", ev.transcriptDelta.c_str());
+}
+
+// ユーザー発話の書き起こし確定(session.update の input.transcription 設定が前提。issue 00009)
+static void test_parse_input_transcription_completed_extracts_transcript() {
+    auto ev = parseServerEvent(
+        R"({"type":"conversation.item.input_audio_transcription.completed","item_id":"msg_1","transcript":"今日の天気は"})");
+    TEST_ASSERT_TRUE(ev.type == ServerEventType::InputTranscriptionCompleted);
+    TEST_ASSERT_EQUAL_STRING("今日の天気は", ev.transcriptText.c_str());
 }
 
 static void test_parse_speech_started() {
@@ -173,6 +191,8 @@ int main() {
     RUN_TEST(test_parse_session_updated);
     RUN_TEST(test_parse_response_output_text_delta_extracts_delta);
     RUN_TEST(test_parse_response_output_audio_delta_extracts_base64);
+    RUN_TEST(test_parse_response_output_audio_transcript_delta_extracts_delta);
+    RUN_TEST(test_parse_input_transcription_completed_extracts_transcript);
     RUN_TEST(test_parse_speech_started);
     RUN_TEST(test_parse_speech_stopped);
     RUN_TEST(test_parse_response_done);

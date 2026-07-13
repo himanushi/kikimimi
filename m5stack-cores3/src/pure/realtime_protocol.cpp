@@ -22,6 +22,9 @@ std::string buildSessionUpdateEvent(const std::string& instructions) {
     // 発話の切れ目はサーバ側 VAD に任せる(push-to-talk にしない。00003 plan)
     JsonObject turnDetection = input["turn_detection"].to<JsonObject>();
     turnDetection["type"] = "semantic_vad";
+    // ユーザー発話の書き起こし(conversation.item.input_audio_transcription.completed を得るため)
+    JsonObject transcription = input["transcription"].to<JsonObject>();
+    transcription["model"] = "gpt-4o-mini-transcribe";
 
     JsonObject output = audio["output"].to<JsonObject>();
     JsonObject outputFormat = output["format"].to<JsonObject>();
@@ -85,6 +88,12 @@ ServerEvent parseServerEvent(const std::string& json) {
     } else if (std::string(type) == "response.output_audio.delta") {
         ev.type = ServerEventType::ResponseOutputAudioDelta;
         ev.audioDelta = std::string(doc["delta"] | "");
+    } else if (std::string(type) == "response.output_audio_transcript.delta") {
+        ev.type = ServerEventType::OutputAudioTranscriptDelta;
+        ev.transcriptDelta = std::string(doc["delta"] | "");
+    } else if (std::string(type) == "conversation.item.input_audio_transcription.completed") {
+        ev.type = ServerEventType::InputTranscriptionCompleted;
+        ev.transcriptText = std::string(doc["transcript"] | "");
     } else if (std::string(type) == "input_audio_buffer.speech_started") {
         ev.type = ServerEventType::SpeechStarted;
     } else if (std::string(type) == "input_audio_buffer.speech_stopped") {
