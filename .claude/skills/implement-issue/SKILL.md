@@ -34,8 +34,9 @@ description: issues/NNNNN/plan.md に基づいて実装する。TDD(red→green)
 ### 5. 記録
 
 - ハマった点があれば `knowhow/<カテゴリ>-<スラッグ>.md` に 1 件 1 ファイルで記録
-- 設計判断をしたら `docs/decisions/` に ADR を追記
-- `issues/NNNNN/memo.md` に実装報告(何をどう検証したか)を書く
+- 実装中の判断は why の範囲で置き場所を分ける: プロジェクト全体に効く判断は `docs/decisions/` に ADR、**この issue に閉じる判断**は `issues/NNNNN/log.md` に「なぜそうしたか」を書く
+- `issues/NNNNN/result.md` に実装報告(受け入れ基準をどう検証したか・plan からの逸脱)を書く
+- 書くことがないファイルは作らない(空の log.md / result.md を儀式として置かない)
 - `docs/ROADMAP.md` があれば該当項目を更新
 
 ### 6. コミット
