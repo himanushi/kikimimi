@@ -64,9 +64,15 @@ String portalReason;
 int lastPortalStationCount = -1;  // -1: 未描画(初回は必ず描画させる)
 PortalInfo staPortalInfo;  // STA 常設の URL 案内用(apName/apPass は使わない)
 
+// 全描画はオフスクリーンの canvas に行い pushSprite で一括転送する。
+// 画面へ直接 fillScreen → 再描画すると消去の黒が一瞬見えてチラつくため
+M5Canvas canvas(&M5.Display);
+
+void pushCanvas() { canvas.pushSprite(0, 0); }
+
 void drawLines(std::initializer_list<String> lines) {
-    auto& d = M5.Display;
-    d.clear(TFT_BLACK);
+    auto& d = canvas;
+    d.fillScreen(TFT_BLACK);
     d.setFont(&fonts::efontJA_16);
     d.setTextColor(TFT_WHITE, TFT_BLACK);
     int y = 16;
@@ -75,6 +81,7 @@ void drawLines(std::initializer_list<String> lines) {
         d.print(line);
         y += 28;
     }
+    pushCanvas();
 }
 
 String currentClockLabel() {
@@ -87,12 +94,11 @@ String currentClockLabel() {
 
 // ホーム画面(対話開始ボタン・設定ボタン・バッテリー・時刻)。RealtimeState::Idle のときのみ表示する
 void drawHomeScreen() {
-    auto& d = M5.Display;
+    auto& d = canvas;
     int w = d.width();
     int h = d.height();
     HomeLayout layout = homeScreenLayout(w, h);
 
-    d.startWrite();
     d.fillScreen(COLOR_BG);
     d.setFont(&fonts::efontJA_16);
 
@@ -121,7 +127,7 @@ void drawHomeScreen() {
     d.setCursor(sb.x + (sb.w - settingsLabelWidth) / 2, sb.y + sb.h / 2 - 8);
     d.print(settingsLabel);
 
-    d.endWrite();
+    pushCanvas();
 }
 
 // ホーム画面を描画し、定期再描画の基準(分・タイマー)を更新する
@@ -143,12 +149,11 @@ void updateHomeScreenPeriodic() {
 
 // 設定画面(音量 +/-・WiFi 設定導線・戻る)。ホーム画面と同じダーク + ティール配色
 void drawSettingsScreen() {
-    auto& d = M5.Display;
+    auto& d = canvas;
     int w = d.width();
     int h = d.height();
     SettingsLayout layout = settingsScreenLayout(w, h);
 
-    d.startWrite();
     d.fillScreen(COLOR_BG);
     d.setFont(&fonts::efontJA_16);
 
@@ -189,7 +194,7 @@ void drawSettingsScreen() {
     d.setCursor(bb.x + (bb.w - backLabelWidth) / 2, bb.y + bb.h / 2 - 8);
     d.print(backLabel);
 
-    d.endWrite();
+    pushCanvas();
 }
 
 bool connectWifi(const WifiCredential& cred) {
@@ -232,13 +237,15 @@ void drawApJoinScreen(const String& reason, const PortalInfo& info) {
               "  パスワード: " + info.apPass, "", "ブラウザで開く:", "  " + info.url});
     // テキスト行(x=12 起点)と QR が重ならないよう、QR は画面右端寄せで幅を絞る
     std::string qrPayload = buildWifiQrPayload(info.apName.c_str(), info.apPass.c_str());
-    M5.Display.qrcode(qrPayload.c_str(), 210, 50, 100);
+    canvas.qrcode(qrPayload.c_str(), 210, 50, 100);
+    pushCanvas();
 }
 
 // AP 接続後の案内。QR のペイロードは URL 文字列そのまま(秘密情報は含まれない)
 void drawUrlGuideScreen(const PortalInfo& info) {
     drawLines({"接続しました", "ブラウザで設定ページを開く:", "  " + info.url, "", "QR を読み取ってください"});
-    M5.Display.qrcode(info.url.c_str(), 210, 50, 100);
+    canvas.qrcode(info.url.c_str(), 210, 50, 100);
+    pushCanvas();
 }
 
 // 接続台数に応じた画面を、直前の描画から変化があったときだけ描き直す
@@ -281,8 +288,7 @@ String realtimeStateLabel(RealtimeState state) {
 
 // 状態ラベル・累計金額・エラーメッセージ(画面上部)のみを再描画する
 void drawStatusArea() {
-    auto& d = M5.Display;
-    d.startWrite();
+    auto& d = canvas;
     d.fillRect(0, 0, d.width(), TRANSCRIPT_TOP_Y, TFT_BLACK);
     d.setFont(&fonts::efontJA_16);
     d.setTextColor(TFT_WHITE, TFT_BLACK);
@@ -294,15 +300,14 @@ void drawStatusArea() {
         d.setCursor(12, 34);
         d.print(errorMessage);
     }
-    d.endWrite();
+    pushCanvas();
 }
 
 // 会話テキスト(画面下部)のみを再描画する。delta 到着ごとに呼ばれるためこの領域だけ更新し、
 // 状態エリアの再描画・全画面クリアはしない(チラつき抑制)
 void drawTranscriptArea() {
-    auto& d = M5.Display;
+    auto& d = canvas;
     int h = d.height();
-    d.startWrite();
     d.fillRect(0, TRANSCRIPT_TOP_Y, d.width(), h - TRANSCRIPT_TOP_Y, TFT_BLACK);
     d.setFont(&fonts::efontJA_16);
     d.setTextColor(TFT_WHITE, TFT_BLACK);
@@ -314,7 +319,7 @@ void drawTranscriptArea() {
         d.print(String(line.c_str()));
         y += TRANSCRIPT_LINE_HEIGHT;
     }
-    d.endWrite();
+    pushCanvas();
 }
 
 void drawRealtimeScreen() {
@@ -402,7 +407,8 @@ void redrawCurrentScreen() {
 
 void showTouchMark(int x, int y) {
     if (mode == Mode::PORTAL) return;
-    M5.Display.fillCircle(x, y, TOUCH_MARK_RADIUS, COLOR_TOUCH_MARK);
+    canvas.fillCircle(x, y, TOUCH_MARK_RADIUS, COLOR_TOUCH_MARK);
+    pushCanvas();
     touchMarkShownAtMs = millis();
 }
 
@@ -432,6 +438,12 @@ void setup() {
     auto cfg = M5.config();
     M5.begin(cfg);
     Serial.begin(115200);
+
+    // フルスクリーン分のオフスクリーンバッファ(320x240x16bit ≒ 150KB)は PSRAM に置く
+    canvas.setPsram(true);
+    if (!canvas.createSprite(M5.Display.width(), M5.Display.height())) {
+        Serial.println("[display] canvas alloc failed");
+    }
 
     StoredConfig config = configLoad();
     currentVolume = config.volume;
