@@ -10,6 +10,7 @@
 
 #include "pure/chat_protocol.h"
 #include "pure/multipart_form.h"
+#include "pure/text_sanitize.h"
 #include "pure/usage_cost.h"
 #include "pure/vad.h"
 #include "pure/wav.h"
@@ -316,6 +317,9 @@ void runPipeline() {
         reportError("応答生成に失敗しました: " + chat.errorMessage);
         return;
     }
+    // web_search 有効時、instructions で禁じても URL・出典が本文に混ざることがあるため
+    // 表示・読み上げ・履歴のすべてで除去後のテキストを使う
+    chat.content = String(text_sanitize::sanitizeForSpeech(chat.content.c_str()).c_str());
     if (callbacks.onTranscriptUpdated) {
         callbacks.onTranscriptUpdated(transcript_view::Speaker::Assistant, chat.content, true);
     }
