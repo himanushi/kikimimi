@@ -19,8 +19,8 @@ double calculateCostJpy(const realtime_protocol::UsageTokens& usage) {
 
     double usd = tokensToUsd(nonCachedInputText, TEXT_INPUT_USD_PER_MILLION) +
                  tokensToUsd(nonCachedInputAudio, AUDIO_INPUT_USD_PER_MILLION) +
-                 tokensToUsd(usage.cachedTextTokens, CACHED_INPUT_USD_PER_MILLION) +
-                 tokensToUsd(usage.cachedAudioTokens, CACHED_INPUT_USD_PER_MILLION) +
+                 tokensToUsd(usage.cachedTextTokens, CACHED_TEXT_INPUT_USD_PER_MILLION) +
+                 tokensToUsd(usage.cachedAudioTokens, CACHED_AUDIO_INPUT_USD_PER_MILLION) +
                  tokensToUsd(usage.outputTextTokens, TEXT_OUTPUT_USD_PER_MILLION) +
                  tokensToUsd(usage.outputAudioTokens, AUDIO_OUTPUT_USD_PER_MILLION);
 

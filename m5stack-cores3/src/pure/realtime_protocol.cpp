@@ -9,7 +9,7 @@ std::string buildSessionUpdateEvent(const std::string& instructions) {
     doc["type"] = "session.update";
     JsonObject session = doc["session"].to<JsonObject>();
     session["type"] = "realtime";
-    session["model"] = "gpt-realtime";
+    session["model"] = "gpt-realtime-mini";
     JsonArray modalities = session["output_modalities"].to<JsonArray>();
     modalities.add("audio");
     session["instructions"] = instructions;

@@ -14,7 +14,7 @@ namespace {
 
 constexpr const char* REALTIME_HOST = "api.openai.com";
 constexpr uint16_t REALTIME_PORT = 443;
-constexpr const char* REALTIME_PATH = "/v1/realtime?model=gpt-realtime";
+constexpr const char* REALTIME_PATH = "/v1/realtime?model=gpt-realtime-mini";
 
 // Realtime API の音声フォーマット(session.update と揃える)
 constexpr uint32_t AUDIO_SAMPLE_RATE = 24000;

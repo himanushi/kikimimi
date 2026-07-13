@@ -28,7 +28,7 @@ static void test_session_update_event_configures_audio_io_with_instructions() {
     std::string json = buildSessionUpdateEvent("あなたは相棒です");
     TEST_ASSERT_TRUE(contains(json, "\"type\":\"session.update\""));
     TEST_ASSERT_TRUE(contains(json, "\"type\":\"realtime\""));
-    TEST_ASSERT_TRUE(contains(json, "\"model\":\"gpt-realtime\""));
+    TEST_ASSERT_TRUE(contains(json, "\"model\":\"gpt-realtime-mini\""));
     TEST_ASSERT_TRUE(contains(json, "\"output_modalities\":[\"audio\"]"));
     TEST_ASSERT_TRUE(contains(json, "\"instructions\":\"あなたは相棒です\""));
     // 入出力とも PCM16 24kHz。rate は入力・出力の両方で必須
