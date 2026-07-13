@@ -3,6 +3,7 @@
 #include <WiFi.h>
 
 #include <algorithm>
+#include <vector>
 
 #include "config_store.h"
 #include "portal.h"
@@ -13,6 +14,8 @@
 #include "pure/transcript_view.h"
 #include "pure/usage_cost.h"
 #include "pure/wifi_qr.h"
+#include "pure/wifi_scan.h"
+#include "pure/wifi_select.h"
 #include "realtime_client.h"
 
 namespace {
@@ -185,11 +188,11 @@ void drawSettingsScreen() {
     d.endWrite();
 }
 
-bool connectWifi(const StoredConfig& config) {
-    drawLines({"WiFi に接続中...", "SSID: " + config.ssid});
-    Serial.printf("[wifi] connecting to %s\n", config.ssid.c_str());
-    WiFi.mode(WIFI_STA);
-    WiFi.begin(config.ssid.c_str(), config.pass.c_str());
+bool connectWifi(const WifiCredential& cred) {
+    String ssid = cred.ssid.c_str();
+    drawLines({"WiFi に接続中...", "SSID: " + ssid});
+    Serial.printf("[wifi] connecting to %s\n", cred.ssid.c_str());
+    WiFi.begin(cred.ssid.c_str(), cred.pass.c_str());
     uint32_t start = millis();
     while (WiFi.status() != WL_CONNECTED && millis() - start < WIFI_CONNECT_TIMEOUT_MS) {
         delay(200);
@@ -201,6 +204,22 @@ bool connectWifi(const StoredConfig& config) {
     }
     Serial.printf("[wifi] connected, ip=%s\n", WiFi.localIP().toString().c_str());
     return true;
+}
+
+// 登録済み WiFi をスキャン結果と突き合わせ、RSSI 降順の候補に順に接続を試す。全滅なら false
+bool connectToBestWifi(const std::vector<WifiCredential>& wifiList) {
+    WiFi.mode(WIFI_STA);
+    drawLines({"周辺 WiFi をスキャン中..."});
+    int n = WiFi.scanNetworks();
+    std::vector<WifiScanEntry> scanResults;
+    for (int i = 0; i < n; ++i) {
+        scanResults.push_back({WiFi.SSID(i).c_str(), WiFi.RSSI(i)});
+    }
+    std::vector<WifiCandidate> candidates = selectWifiCandidates(wifiList, scanResults);
+    for (const auto& candidate : candidates) {
+        if (connectWifi(candidate.credential)) return true;
+    }
+    return false;
 }
 
 // 左: テキスト情報 / 右: QR(QR は AP 接続用)
@@ -391,7 +410,7 @@ void setup() {
         startPortal("未設定です");
         return;
     }
-    if (!connectWifi(config)) {
+    if (!connectToBestWifi(config.wifiList)) {
         startPortal("WiFi 接続に失敗しました");
         return;
     }

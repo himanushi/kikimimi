@@ -8,6 +8,7 @@
 
 #include "config_store.h"
 #include "pure/setup_config.h"
+#include "pure/wifi_list.h"
 #include "pure/wifi_scan.h"
 
 namespace {
@@ -73,6 +74,22 @@ String scanSectionHtml(const String& selectedSsid) {
           "</select></label> <a href=\"/rescan\">再スキャン</a></p>";
 }
 
+// 登録済み WiFi 一覧(SSID のみ表示。パスワードは出さない)+ 各行に削除ボタン
+String registeredWifiListHtml() {
+    StoredConfig config = configLoad();
+    if (config.wifiList.empty()) return "<p>登録済みの WiFi はありません</p>";
+    String html = "<ul>";
+    for (const auto& cred : config.wifiList) {
+        String ssid = htmlEscape(String(cred.ssid.c_str()));
+        html += "<li>" + ssid +
+               " <form method=\"POST\" action=\"/wifi/delete\" style=\"display:inline\">"
+               "<input type=\"hidden\" name=\"ssid\" value=\"" + ssid + "\">"
+               "<button type=\"submit\">削除</button></form></li>";
+    }
+    html += "</ul>";
+    return html;
+}
+
 String formPage(const String& error, const String& ssid, const String& selectedSsid) {
     String page =
         "<!DOCTYPE html><html lang=\"ja\"><head><meta charset=\"utf-8\">"
@@ -80,6 +97,7 @@ String formPage(const String& error, const String& ssid, const String& selectedS
         "<title>kikimimi setup</title></head><body>"
         "<h1>kikimimi 初期設定</h1>";
     if (error.length()) page += "<p style=\"color:red\">" + htmlEscape(error) + "</p>";
+    page += "<h2>登録済み WiFi</h2>" + registeredWifiListHtml() + "<h2>WiFi を追加</h2>";
     page +=
         "<form method=\"POST\" action=\"/save\">" + scanSectionHtml(selectedSsid) +
         "<p><label>WiFi SSID 手入力(一覧にない場合)<br>"
@@ -111,11 +129,14 @@ void handleSave() {
         webServer.send(200, "text/html", formPage(r.error.c_str(), manualSsid, selectSsid));
         return;
     }
-    StoredConfig config;
-    config.ssid = r.config.ssid.c_str();
-    config.pass = r.config.pass.c_str();
-    config.apiKey = r.config.apiKey.c_str();
-    if (!configSave(config)) {
+    StoredConfig current = configLoad();
+    WifiListAddResult addResult =
+        addOrUpdateWifiCredential(current.wifiList, {r.config.ssid, r.config.pass});
+    if (!addResult.ok) {
+        webServer.send(200, "text/html", formPage(addResult.error.c_str(), manualSsid, selectSsid));
+        return;
+    }
+    if (!configSave(addResult.list, r.config.apiKey.c_str())) {
         webServer.send(500, "text/html",
                        "<!DOCTYPE html><html lang=\"ja\"><head><meta charset=\"utf-8\"></head><body>"
                        "<h1>保存に失敗しました</h1><p>本体の保存領域に書き込めませんでした。"
@@ -127,6 +148,22 @@ void handleSave() {
                    "<h1>保存しました</h1><p>再起動して WiFi に接続します。</p></body></html>");
     saved = true;
     savedAtMs = millis();
+}
+
+// 登録済み WiFi の削除。再接続の候補が減るだけで即時の再起動は不要なため、一覧ページに戻す
+void handleDeleteWifi() {
+    StoredConfig current = configLoad();
+    std::vector<WifiCredential> updated =
+        removeWifiCredential(current.wifiList, webServer.arg("ssid").c_str());
+    if (!configSave(updated, current.apiKey)) {
+        webServer.send(500, "text/html",
+                       "<!DOCTYPE html><html lang=\"ja\"><head><meta charset=\"utf-8\"></head><body>"
+                       "<h1>削除に失敗しました</h1><p>本体の保存領域に書き込めませんでした。"
+                       "電源を入れ直してやり直してください。</p></body></html>");
+        return;
+    }
+    webServer.sendHeader("Location", "/");
+    webServer.send(302, "text/plain", "");
 }
 
 // captive portal 検出(iOS の /hotspot-detect.html 等)を含む未知の URL は設定画面へ誘導する。
@@ -141,6 +178,7 @@ void registerFormHandlers() {
     webServer.on("/", HTTP_GET, handleRoot);
     webServer.on("/rescan", HTTP_GET, handleRescan);
     webServer.on("/save", HTTP_POST, handleSave);
+    webServer.on("/wifi/delete", HTTP_POST, handleDeleteWifi);
     webServer.onNotFound(handleNotFound);
 }
 
