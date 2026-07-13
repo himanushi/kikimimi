@@ -33,7 +33,7 @@ kikimimi/
 
 ## 設計原則
 
-- **秘密情報は repo に置かない**: API キーはサーバ側の secret またはビルド時の環境変数。デバイス・repo にハードコードしない
+- **秘密情報は repo に置かない**: API キーはセットアップポータルで登録しデバイスの NVS に保存する(`docs/decisions/00002`)。repo・ビルド成果物・コミットに含めない
 - **シークレットスキャン**: gitleaks pre-commit + CI + GitHub push protection で強制(`docs/decisions/00001`)。clone 後に `git config core.hooksPath .githooks`。`--no-verify` での hook バイパスは禁止。誤検知は `.gitleaks.toml` の allowlist に理由つきで追記
 - **単純な対話に徹する**: リマインド・目標管理・能動的な問いかけ等の機能は作らない(前作との明確な差別化)
 - **知識蓄積**: 会話から得た知識の保存・参照が中核機能。ストレージ方式は docs で決定してから実装する

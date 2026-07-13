@@ -17,3 +17,4 @@
 - [analysis/ai-code-quality-assurance.md](analysis/ai-code-quality-assurance.md) — AI 生成コードの品質保証の調査
 - [analysis/fable-vs-opus-analysis.md](analysis/fable-vs-opus-analysis.md) — Fable 5 と Opus 4.8 の差の分析(振る舞い移植の根拠)
 - [decisions/00001-secret-scanning-guardrails.md](decisions/00001-secret-scanning-guardrails.md) — シークレット混入防止の多層ガードレール
+- [decisions/00002-api-key-provisioning-via-setup-portal.md](decisions/00002-api-key-provisioning-via-setup-portal.md) — API キーはセットアップポータルで登録し NVS 保存
