@@ -23,7 +23,7 @@ kikimimi/
 
 ## 作業ルール
 
-- **issue 駆動**: 実装単位は `issues/NNNNN/plan.md`(作成は `/create-issue`、実装は `/implement-issue`)。触るファイルが交差しない issue は並列実行可
+- **issue 駆動**: 実装単位は `issues/NNNNN/plan.md`(作成は `/create-issue`、実装は `/implement-issue`)。実装は subagent(model: sonnet)へ background で委譲し、触るファイルが交差しない issue は並列実行する
 - **knowhow の蓄積**: ハマった点は `knowhow/<カテゴリ>-<スラッグ>.md` に 1 件 1 ファイルで記録し、実装前に必読。M5Stack / PlatformIO 系は前作 `../yesman/knowhow/` の知見(`m5stack-*`, `pio-*`)も参照する
 - **TDD**: テスト可能な部分はテストを先に書く
 - コミットメッセージ: 日本語、prefix `add: / update: / fix: / refactor: / docs:`

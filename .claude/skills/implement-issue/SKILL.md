@@ -7,6 +7,13 @@ description: issues/NNNNN/plan.md に基づいて実装する。TDD(red→green)
 
 `issues/NNNNN/plan.md` を受け取ってから、コミットして終えるまでの手順。順番を飛ばさない。
 
+## 実行形態(メインエージェントへの指示)
+
+- メインエージェントはこの手順を自分で実行せず、**subagent(model: sonnet)を background で起動して委譲する**。プロンプトには issue 番号・この SKILL.md のパス・CLAUDE.md の遵守を含める
+- 触るファイルが交差しない issue は**複数の subagent を並列起動**する。依存関係のある issue は前段の完了(コミット)を待つ
+- subagent の完了報告を受けたら、メインは result.md とコミットを確認してからユーザーに報告する
+- 手順 4 のコードレビューは実装した subagent 自身がさらにフレッシュな subagent を起動して行う(実装者とレビュアーの分離を保つ)
+
 ## 手順
 
 ### 1. 文脈の読み込み
