@@ -14,6 +14,8 @@ namespace {
 
 constexpr const char* AP_NAME = "kikimimi-setup";
 constexpr const char* MANUAL_OPTION = "";  // select の値が空 = 手入力欄を使う
+// DNSServer が AP モード中ワイルドカード解決しているため、IP の代わりにこのドメインで案内できる(STA では使えない)
+constexpr const char* PORTAL_DOMAIN = "kiki.mimi";
 
 DNSServer dnsServer;
 WebServer webServer(80);
@@ -128,7 +130,7 @@ void handleSave() {
 
 // captive portal 検出(iOS の /hotspot-detect.html 等)を含む未知の URL は設定画面へ誘導する
 void handleNotFound() {
-    webServer.sendHeader("Location", String("http://") + WiFi.softAPIP().toString() + "/");
+    webServer.sendHeader("Location", String("http://") + PORTAL_DOMAIN + "/");
     webServer.send(302, "text/plain", "");
 }
 
@@ -154,7 +156,7 @@ PortalInfo portalStart() {
     webServer.on("/save", HTTP_POST, handleSave);
     webServer.onNotFound(handleNotFound);
     webServer.begin();
-    return {AP_NAME, apPass, String("http://") + WiFi.softAPIP().toString() + "/"};
+    return {AP_NAME, apPass, String("http://") + PORTAL_DOMAIN + "/"};
 }
 
 bool portalLoop() {

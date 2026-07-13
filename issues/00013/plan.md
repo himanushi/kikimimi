@@ -8,11 +8,11 @@ AP モードのセットアップで、ブラウザに IP でなく `http://kiki
 
 ## 受け入れ基準
 
-- [ ] `portalStart()` が返す案内 URL が `http://kiki.mimi/` になる(検証: native テストまたはビルド + 実機画面の目視)
-- [ ] AP に接続したスマホのブラウザで `http://kiki.mimi/` を開くと設定フォームが表示される(検証: 実機)
-- [ ] captive portal 検出のリダイレクト先も `http://kiki.mimi/` になり、従来どおり設定ページに誘導される(検証: 実機でスマホ接続時の自動ポップアップ)
-- [ ] 画面の URL QR のペイロードが `http://kiki.mimi/` になる(検証: 実機で QR を読んで開く)
-- [ ] cores3 ビルドが通る(検証: `uvx --from platformio pio run -e cores3` SUCCESS)
+- [x] `portalStart()` が返す案内 URL が `http://kiki.mimi/` になる(検証: native テストまたはビルド + 実機画面の目視)
+- [ ] AP に接続したスマホのブラウザで `http://kiki.mimi/` を開くと設定フォームが表示される(検証: 実機、未検証)
+- [ ] captive portal 検出のリダイレクト先も `http://kiki.mimi/` になり、従来どおり設定ページに誘導される(検証: 実機でスマホ接続時の自動ポップアップ、未検証)
+- [ ] 画面の URL QR のペイロードが `http://kiki.mimi/` になる(検証: 実機で QR を読んで開く、未検証)
+- [x] cores3 ビルドが通る(検証: `uvx --from platformio pio run -e cores3` SUCCESS)
 
 ## やらないこと
 
