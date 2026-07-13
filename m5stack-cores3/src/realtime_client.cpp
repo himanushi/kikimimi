@@ -155,6 +155,11 @@ void onWsEvent(WStype_t type, uint8_t* payload, size_t length) {
             Serial.println("[realtime] ws connected");
             break;
         case WStype_TEXT:
+            // 音声 delta のフレームサイズ実測用(旧上限 15KB 超の頻度を知るため大きいものだけ)
+            if (length > 8 * 1024) {
+                Serial.printf("[realtime] rx large frame %u bytes heap=%u\n",
+                              static_cast<unsigned>(length), ESP.getFreeHeap());
+            }
             handleFrame(reinterpret_cast<const char*>(payload));
             break;
         case WStype_DISCONNECTED:
