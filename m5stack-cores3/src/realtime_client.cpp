@@ -8,6 +8,7 @@
 
 #include "pure/audio_codec.h"
 #include "pure/realtime_protocol.h"
+#include "pure/usage_cost.h"
 
 namespace {
 
@@ -36,6 +37,7 @@ bool disconnectRequested = false;
 int16_t* recordChunkBuf = nullptr;  // CHUNK_SAMPLES 分の録音スクラッチ(PSRAM)
 uint8_t* playbackBuf = nullptr;     // 応答音声の受信バッファ(PSRAM)
 size_t playbackLen = 0;             // 今回の応答でこれまでに貯めたバイト数
+double sessionCostJpy = 0.0;        // このセッション(realtimeConnect 以降)の累計金額
 
 bool ensureBuffersAllocated() {
     if (!recordChunkBuf) {
@@ -134,6 +136,8 @@ void handleFrame(const char* payload) {
             break;
         case realtime_protocol::ServerEventType::ResponseDone:
             Serial.println("[realtime] response.done");
+            sessionCostJpy += usage_cost::calculateCostJpy(ev.usage);
+            if (callbacks.onCostUpdated) callbacks.onCostUpdated(sessionCostJpy);
             if (state == RealtimeState::Thinking) beginSpeaking();
             break;
         case realtime_protocol::ServerEventType::Error:
@@ -193,6 +197,8 @@ void realtimeConnect(const String& apiKey, const String& instructions, RealtimeC
     }
     pendingInstructions = instructions;
     disconnectRequested = false;
+    sessionCostJpy = 0.0;
+    if (callbacks.onCostUpdated) callbacks.onCostUpdated(sessionCostJpy);
     ws.beginSSL(REALTIME_HOST, REALTIME_PORT, REALTIME_PATH);
     ws.setExtraHeaders(("Authorization: Bearer " + apiKey).c_str());
     ws.onEvent(onWsEvent);

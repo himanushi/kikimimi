@@ -14,10 +14,11 @@ enum class RealtimeState {
     ErrorState,    // 接続失敗・API エラー(タップで Idle に戻り再試行できる)
 };
 
-// state 遷移・エラーメッセージを呼び出し側(画面表示)へ通知する
+// state 遷移・エラーメッセージ・セッション累計金額を呼び出し側(画面表示)へ通知する
 struct RealtimeCallbacks {
     std::function<void(RealtimeState)> onStateChanged;
     std::function<void(const String& message)> onError;
+    std::function<void(double sessionCostJpy)> onCostUpdated;
 };
 
 // WebSocket を開始する。apiKey が空なら接続を試みず ErrorState 通知のみ行う

@@ -91,6 +91,16 @@ ServerEvent parseServerEvent(const std::string& json) {
         ev.type = ServerEventType::SpeechStopped;
     } else if (std::string(type) == "response.done") {
         ev.type = ServerEventType::ResponseDone;
+        JsonObjectConst usage = doc["response"]["usage"];
+        JsonObjectConst inputDetails = usage["input_token_details"];
+        JsonObjectConst cachedDetails = inputDetails["cached_tokens_details"];
+        JsonObjectConst outputDetails = usage["output_token_details"];
+        ev.usage.inputTextTokens = inputDetails["text_tokens"] | 0L;
+        ev.usage.inputAudioTokens = inputDetails["audio_tokens"] | 0L;
+        ev.usage.cachedTextTokens = cachedDetails["text_tokens"] | 0L;
+        ev.usage.cachedAudioTokens = cachedDetails["audio_tokens"] | 0L;
+        ev.usage.outputTextTokens = outputDetails["text_tokens"] | 0L;
+        ev.usage.outputAudioTokens = outputDetails["audio_tokens"] | 0L;
     } else if (std::string(type) == "error") {
         ev.type = ServerEventType::Error;
         ev.errorMessage = std::string(doc["error"]["message"] | "");

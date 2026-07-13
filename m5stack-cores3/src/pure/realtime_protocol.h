@@ -30,11 +30,23 @@ enum class ServerEventType {
     Unknown,
 };
 
+// response.done の response.usage から取り出したトークン内訳。
+// cached系は input の text/audio トークン数の内数(別枠加算ではない)
+struct UsageTokens {
+    long inputTextTokens = 0;
+    long inputAudioTokens = 0;
+    long cachedTextTokens = 0;
+    long cachedAudioTokens = 0;
+    long outputTextTokens = 0;
+    long outputAudioTokens = 0;
+};
+
 struct ServerEvent {
     ServerEventType type = ServerEventType::Unknown;
     std::string textDelta;     // ResponseOutputTextDelta のとき、追加されたテキスト断片
     std::string audioDelta;    // ResponseOutputAudioDelta のとき、base64 化された PCM16 断片
     std::string errorMessage;  // Error のとき、表示用メッセージ
+    UsageTokens usage;         // ResponseDone のとき、response.usage のトークン内訳
 };
 
 // サーバイベントの type を判別する。JSON が壊れている・type が未知の場合は Unknown を返す

@@ -5,6 +5,7 @@
 #include "config_store.h"
 #include "portal.h"
 #include "pure/portal_screen.h"
+#include "pure/usage_cost.h"
 #include "pure/wifi_qr.h"
 #include "realtime_client.h"
 
@@ -18,6 +19,7 @@ constexpr const char* SESSION_INSTRUCTIONS = "あなたは kikimimi という名
 
 String storedApiKey;
 String errorMessage;
+double sessionCostJpy = 0.0;
 
 PortalInfo portalInfo;
 String portalReason;
@@ -102,7 +104,9 @@ String realtimeStateLabel(RealtimeState state) {
 }
 
 void drawRealtimeScreen() {
-    drawLines({realtimeStateLabel(realtimeCurrentState()), "", errorMessage});
+    String statusLine = realtimeStateLabel(realtimeCurrentState()) + "  " +
+                         usage_cost::formatJpyLabel(sessionCostJpy).c_str();
+    drawLines({statusLine, "", errorMessage});
 }
 
 RealtimeCallbacks buildRealtimeCallbacks() {
@@ -113,6 +117,10 @@ RealtimeCallbacks buildRealtimeCallbacks() {
     };
     cb.onError = [](const String& message) {
         errorMessage = message;
+        drawRealtimeScreen();
+    };
+    cb.onCostUpdated = [](double jpy) {
+        sessionCostJpy = jpy;
         drawRealtimeScreen();
     };
     return cb;

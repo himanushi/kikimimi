@@ -105,6 +105,46 @@ static void test_parse_response_done() {
     TEST_ASSERT_TRUE(ev.type == ServerEventType::ResponseDone);
 }
 
+// response.usage の input_token_details / output_token_details からトークン内訳を取り出す。
+// cached_tokens_details は input の text/audio トークン数の内数(00007 plan)
+static void test_parse_response_done_extracts_usage_token_breakdown() {
+    auto ev = parseServerEvent(R"({
+        "type":"response.done",
+        "response":{
+            "id":"resp_1",
+            "usage":{
+                "total_tokens":176,
+                "input_tokens":89,
+                "output_tokens":87,
+                "input_token_details":{
+                    "text_tokens":31,
+                    "audio_tokens":58,
+                    "cached_tokens":20,
+                    "cached_tokens_details":{"text_tokens":10,"audio_tokens":10}
+                },
+                "output_token_details":{
+                    "text_tokens":30,
+                    "audio_tokens":57
+                }
+            }
+        }
+    })");
+    TEST_ASSERT_TRUE(ev.type == ServerEventType::ResponseDone);
+    TEST_ASSERT_EQUAL(31, ev.usage.inputTextTokens);
+    TEST_ASSERT_EQUAL(58, ev.usage.inputAudioTokens);
+    TEST_ASSERT_EQUAL(10, ev.usage.cachedTextTokens);
+    TEST_ASSERT_EQUAL(10, ev.usage.cachedAudioTokens);
+    TEST_ASSERT_EQUAL(30, ev.usage.outputTextTokens);
+    TEST_ASSERT_EQUAL(57, ev.usage.outputAudioTokens);
+}
+
+// usage が欠けたフレーム(session.update 直後など想定しないが)は 0 埋めのまま
+static void test_parse_response_done_without_usage_defaults_to_zero() {
+    auto ev = parseServerEvent(R"({"type":"response.done","response":{"id":"resp_1"}})");
+    TEST_ASSERT_EQUAL(0, ev.usage.inputTextTokens);
+    TEST_ASSERT_EQUAL(0, ev.usage.outputAudioTokens);
+}
+
 static void test_parse_error_extracts_message() {
     auto ev = parseServerEvent(
         R"({"type":"error","error":{"type":"invalid_request_error","message":"invalid api key"}})");
@@ -136,6 +176,8 @@ int main() {
     RUN_TEST(test_parse_speech_started);
     RUN_TEST(test_parse_speech_stopped);
     RUN_TEST(test_parse_response_done);
+    RUN_TEST(test_parse_response_done_extracts_usage_token_breakdown);
+    RUN_TEST(test_parse_response_done_without_usage_defaults_to_zero);
     RUN_TEST(test_parse_error_extracts_message);
     RUN_TEST(test_parse_unknown_type_is_unknown);
     RUN_TEST(test_parse_malformed_json_is_unknown_not_crash);
