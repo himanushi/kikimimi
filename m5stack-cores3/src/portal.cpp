@@ -21,6 +21,7 @@ DNSServer dnsServer;
 WebServer webServer(80);
 bool saved = false;
 uint32_t savedAtMs = 0;
+bool apActive = false;  // true: AP モード(captive DNS・接続台数あり) / false: STA 常設(Web サーバのみ)
 
 String htmlEscape(const String& s) {
     String out;
@@ -128,10 +129,19 @@ void handleSave() {
     savedAtMs = millis();
 }
 
-// captive portal 検出(iOS の /hotspot-detect.html 等)を含む未知の URL は設定画面へ誘導する
+// captive portal 検出(iOS の /hotspot-detect.html 等)を含む未知の URL は設定画面へ誘導する。
+// kiki.mimi は AP モードの DNSServer ワイルドカードでのみ解決できるため、STA では使わない
 void handleNotFound() {
-    webServer.sendHeader("Location", String("http://") + PORTAL_DOMAIN + "/");
+    webServer.sendHeader("Location", apActive ? String("http://") + PORTAL_DOMAIN + "/" : "/");
     webServer.send(302, "text/plain", "");
+}
+
+// AP・STA 共通のフォーム・保存・再スキャンハンドラを登録する
+void registerFormHandlers() {
+    webServer.on("/", HTTP_GET, handleRoot);
+    webServer.on("/rescan", HTTP_GET, handleRescan);
+    webServer.on("/save", HTTP_POST, handleSave);
+    webServer.onNotFound(handleNotFound);
 }
 
 }  // namespace
@@ -145,25 +155,30 @@ static String generateApPass() {
 }
 
 PortalInfo portalStart() {
+    apActive = true;
     String apPass = generateApPass();
     // AP_STA: 同期スキャン(WIFI_STA 単体)は SoftAP を止めてしまうため、AP を維持したまま STA 側でスキャンする
     WiFi.mode(WIFI_AP_STA);
     WiFi.softAP(AP_NAME, apPass.c_str());
     WiFi.scanNetworks(true);  // 非同期スキャン開始。結果は handleRoot が WiFi.scanComplete() で取得する
     dnsServer.start(53, "*", WiFi.softAPIP());
-    webServer.on("/", HTTP_GET, handleRoot);
-    webServer.on("/rescan", HTTP_GET, handleRescan);
-    webServer.on("/save", HTTP_POST, handleSave);
-    webServer.onNotFound(handleNotFound);
+    registerFormHandlers();
     webServer.begin();
     return {AP_NAME, apPass, String("http://") + PORTAL_DOMAIN + "/"};
 }
 
+PortalInfo portalStartSta() {
+    apActive = false;
+    registerFormHandlers();
+    webServer.begin();
+    return {"", "", String("http://") + WiFi.localIP().toString() + "/"};
+}
+
 bool portalLoop() {
-    dnsServer.processNextRequest();
+    if (apActive) dnsServer.processNextRequest();
     webServer.handleClient();
     // 保存応答がブラウザへ届く猶予をとってから再起動を要求する
     return saved && (millis() - savedAtMs > 2000);
 }
 
-int portalStationCount() { return WiFi.softAPgetStationNum(); }
+int portalStationCount() { return apActive ? WiFi.softAPgetStationNum() : 0; }

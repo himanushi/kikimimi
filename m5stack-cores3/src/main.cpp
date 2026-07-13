@@ -8,6 +8,7 @@
 #include "portal.h"
 #include "pure/home_screen.h"
 #include "pure/portal_screen.h"
+#include "pure/settings_entry.h"
 #include "pure/settings_screen.h"
 #include "pure/transcript_view.h"
 #include "pure/usage_cost.h"
@@ -16,8 +17,9 @@
 
 namespace {
 
-// SETTINGS はホーム(Idle)からのみ入り、戻る/WiFi 設定でホーム or ポータルへ抜ける
-enum class Mode { PORTAL, CONNECTED, SETTINGS };
+// SETTINGS はホーム(Idle)からのみ入り、戻る/WiFi 設定でホーム or ポータルへ抜ける。
+// SETTINGS_URL_GUIDE は SETTINGS から WiFi 設定済みのときだけ入り、タップで SETTINGS に戻る
+enum class Mode { PORTAL, CONNECTED, SETTINGS, SETTINGS_URL_GUIDE };
 Mode mode = Mode::PORTAL;
 
 constexpr uint32_t WIFI_CONNECT_TIMEOUT_MS = 15000;
@@ -53,6 +55,7 @@ uint32_t lastHomeRefreshMs = 0;
 PortalInfo portalInfo;
 String portalReason;
 int lastPortalStationCount = -1;  // -1: 未描画(初回は必ず描画させる)
+PortalInfo staPortalInfo;  // STA 常設の URL 案内用(apName/apPass は使わない)
 
 void drawLines(std::initializer_list<String> lines) {
     auto& d = M5.Display;
@@ -225,6 +228,12 @@ void updatePortalScreen(int stationCount) {
     }
 }
 
+// STA 常設(issue 00010): Web サーバは setup() で起動済みのため、ここでは URL 案内を表示するだけ
+void enterStaUrlGuide() {
+    mode = Mode::SETTINGS_URL_GUIDE;
+    drawUrlGuideScreen(staPortalInfo);
+}
+
 void startPortal(const String& reason) {
     portalInfo = portalStart();
     portalReason = reason;
@@ -389,6 +398,9 @@ void setup() {
     configTime(NTP_GMT_OFFSET_SEC, 0, NTP_SERVER_PRIMARY, NTP_SERVER_FALLBACK);
     mode = Mode::CONNECTED;
     storedApiKey = config.apiKey;
+    // STA 常設(issue 00010): 設定画面を開かなくても Web サーバは起動時から待ち受ける
+    staPortalInfo = portalStartSta();
+    Serial.printf("[portal] sta web server started url=%s\n", staPortalInfo.url.c_str());
     drawForCurrentState();
 }
 
@@ -400,6 +412,10 @@ void loop() {
             Serial.println("[portal] config saved, restarting");
             ESP.restart();
         }
+    } else if (portalLoop()) {
+        // STA 常設の Web サーバは画面状態に関わらず処理し続ける(QR 画面を閉じても保存できる)
+        Serial.println("[portal] config saved, restarting");
+        ESP.restart();
     }
     if (mode == Mode::CONNECTED) {
         realtimeLoop();
@@ -425,12 +441,23 @@ void loop() {
                 case SettingsTap::VolumeUp: applyVolumeChange(settingsVolumeIncrease(currentVolume)); break;
                 case SettingsTap::VolumeDown: applyVolumeChange(settingsVolumeDecrease(currentVolume)); break;
                 case SettingsTap::WifiSetup:
-                    M5.Speaker.end();
-                    startPortal("設定");
+                    if (settingsEntryAction(WiFi.status() == WL_CONNECTED) ==
+                        SettingsEntryAction::ShowStaUrlGuide) {
+                        enterStaUrlGuide();
+                    } else {
+                        M5.Speaker.end();
+                        startPortal("設定");
+                    }
                     break;
                 case SettingsTap::Back: exitSettingsToHome(); break;
                 case SettingsTap::None: break;
             }
+        }
+    }
+    if (mode == Mode::SETTINGS_URL_GUIDE) {
+        if (M5.Touch.getDetail().wasPressed()) {
+            mode = Mode::SETTINGS;
+            drawSettingsScreen();
         }
     }
     delay(10);

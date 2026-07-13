@@ -11,6 +11,9 @@ struct PortalInfo {
 };
 PortalInfo portalStart();
 
+// WiFi 接続済み(STA)のまま同じ設定フォームを Web サーバだけで提供する(AP 切替・captive DNS なし)
+PortalInfo portalStartSta();
+
 // loop() から毎回呼ぶ。フォーム保存後は true を返し続ける(呼び出し側が再起動する)
 bool portalLoop();
 
